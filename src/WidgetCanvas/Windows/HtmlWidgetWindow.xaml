@@ -1,0 +1,184 @@
+<Window x:Class="WidgetCanvas.Windows.HtmlWidgetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:webview2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="HTML 组件"
+        Width="360"
+        Height="278"
+        MinWidth="140"
+        MinHeight="127"
+        WindowStartupLocation="Manual"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Background="Transparent"
+        Opacity="0"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        PreviewKeyDown="Window_PreviewKeyDown">
+    <Window.Resources>
+        <Style x:Key="HeaderButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="27" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Margin" Value="2,0,0,0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Foreground" Value="#DCE8F8" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#34445B" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#1C2A3C" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CloseButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource HeaderButtonStyle}">
+            <Setter Property="Foreground" Value="#E8EEF8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#A94B3442" />
+                                <Setter Property="Foreground" Value="#FFE8EC" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#C92E1E29" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="#F016202E"
+            BorderThickness="0"
+            CornerRadius="11">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="30" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="7" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0"
+                    Background="#F31A2535"
+                    CornerRadius="10,10,0,0"
+                    MouseLeftButtonDown="Header_MouseLeftButtonDown"
+                    MouseRightButtonUp="Header_MouseRightButtonUp">
+                <Grid Margin="10,0,4,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="StatusDot"
+                               Text="●"
+                               Foreground="#6DD39E"
+                               FontSize="8"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <TextBlock x:Name="TitleText"
+                               Grid.Column="1"
+                               Foreground="#EAF1FB"
+                               FontSize="11.5"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <Button x:Name="OriginButton"
+                            Grid.Column="2"
+                            Content="×"
+                            Style="{StaticResource CloseButtonStyle}"
+                            Click="CloseButton_Click" />
+                </Grid>
+            </Border>
+
+            <Grid x:Name="WidgetContentHost" Grid.Row="1" Background="#101722">
+                <webview2:WebView2 x:Name="Browser" Visibility="Hidden" />
+                <Border x:Name="LoadingPanel" Background="#101722">
+                    <TextBlock Text="正在加载组件…"
+                               Foreground="#788CA8"
+                               FontSize="11"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <Border x:Name="ErrorPanel"
+                        Visibility="Collapsed"
+                        Background="#1C181E"
+                        Padding="14">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="组件加载失败"
+                                   Foreground="#F3E8EC"
+                                   FontSize="12.5"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock x:Name="ErrorText"
+                                   Text="可以重试或编辑组件"
+                                   Foreground="#B0929D"
+                                   FontSize="10.5"
+                                   Margin="0,5,0,10"
+                                   TextAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button Content="重试" Padding="11,4" Margin="3,0" Click="RetryButton_Click" />
+                            <Button Content="编辑" Padding="11,4" Margin="3,0" Click="EditButton_Click" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid Grid.Row="2" Background="#F31A2535">
+                <Path Data="M0,6 L6,0 M4,6 L6,4"
+                      Width="7"
+                      Height="7"
+                      Margin="0,0,4,0"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Center"
+                      Stroke="#7890AECF"
+                      StrokeThickness="1"
+                      IsHitTestVisible="False" />
+                <Thumb x:Name="ResizeThumb"
+                       Width="24"
+                       HorizontalAlignment="Right"
+                       Background="Transparent"
+                       Cursor="SizeNWSE"
+                       DragDelta="ResizeThumb_DragDelta"
+                       ToolTip="拖动调整大小" />
+            </Grid>
+
+            <Border Grid.RowSpan="3"
+                    Panel.ZIndex="20"
+                    BorderBrush="#745A7190"
+                    BorderThickness="1"
+                    CornerRadius="11"
+                    IsHitTestVisible="False" />
+        </Grid>
+    </Border>
+</Window>

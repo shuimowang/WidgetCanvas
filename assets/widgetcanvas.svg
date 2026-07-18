@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="WidgetCanvas">
+  <defs>
+    <linearGradient id="background" x1="32" y1="24" x2="224" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17243A"/>
+      <stop offset="1" stop-color="#0B1220"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="52" y1="54" x2="132" y2="134" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#79C8FF"/>
+      <stop offset="1" stop-color="#438EF4"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="144" y1="55" x2="207" y2="119" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B7A2FF"/>
+      <stop offset="1" stop-color="#7E63EA"/>
+    </linearGradient>
+    <linearGradient id="aqua" x1="67" y1="151" x2="192" y2="202" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#75E2D4"/>
+      <stop offset="1" stop-color="#3BB7C8"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="54" fill="url(#background)"/>
+  <rect x="43" y="45" width="91" height="91" rx="25" fill="url(#blue)"/>
+  <rect x="145" y="45" width="68" height="68" rx="21" fill="url(#violet)"/>
+  <rect x="61" y="148" width="152" height="63" rx="23" fill="url(#aqua)"/>
+  <circle cx="190" cy="132" r="11" fill="#F4F8FF" fill-opacity=".9"/>
+</svg>

@@ -1,0 +1,30 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore WidgetCanvas.slnx
+      - name: Test
+        run: dotnet test tests/WidgetCanvas.Tests/WidgetCanvas.Tests.csproj -c Release --no-restore
+      - name: Publish
+        run: dotnet publish src/WidgetCanvas/WidgetCanvas.csproj -c Release -r win-x64 --self-contained true --no-restore -o artifacts/WidgetCanvas
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path artifacts/WidgetCanvas/* -DestinationPath artifacts/WidgetCanvas-win-x64.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/WidgetCanvas-win-x64.zip

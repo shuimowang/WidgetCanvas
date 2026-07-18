@@ -1,0 +1,410 @@
+<Window x:Class="WidgetCanvas.Windows.HtmlWidgetCanvasWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="浮岛"
+        Width="1180"
+        Height="720"
+        WindowStartupLocation="Manual"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Background="Transparent"
+        Opacity="0"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        PreviewKeyDown="Window_PreviewKeyDown">
+    <Window.Resources>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F5F8FF" />
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#9AAECD" />
+        <SolidColorBrush x:Key="TextMutedBrush" Color="#7185A5" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#5EA8FF" />
+
+        <Style x:Key="ToolButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="#D9263145" />
+            <Setter Property="BorderBrush" Value="#596C89" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="13,7" />
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="15"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#F035435C" />
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#829EC3" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#F01B2535" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.42" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AccentButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="#07111F" />
+            <Setter Property="Background" Value="#78B9FF" />
+            <Setter Property="BorderBrush" Value="#A9D3FF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="16,8" />
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="15"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#9CCBFF" />
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#D3E9FF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#5798DF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.38" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DangerButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource ToolButtonStyle}">
+            <Setter Property="Foreground" Value="#FFB8BE" />
+            <Setter Property="Background" Value="#B5322530" />
+            <Setter Property="BorderBrush" Value="#7A594F5C" />
+        </Style>
+
+        <Style x:Key="EditorTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Foreground" Value="#EAF1FC" />
+            <Setter Property="Background" Value="#C90E1520" />
+            <Setter Property="BorderBrush" Value="#3F526E" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CaretBrush" Value="#FFFFFF" />
+            <Setter Property="Padding" Value="11,7" />
+            <Setter Property="SelectionBrush" Value="#6B9FD2FF" />
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid" ClipToBounds="True">
+        <Canvas x:Name="WidgetCanvas"
+                Background="#B80A0F18"
+                MouseLeftButtonDown="WidgetCanvas_MouseLeftButtonDown"
+                MouseMove="WidgetCanvas_MouseMove"
+                MouseLeftButtonUp="WidgetCanvas_MouseLeftButtonUp" />
+
+        <Canvas x:Name="SelectionCanvas" IsHitTestVisible="False">
+            <Rectangle x:Name="SelectionRectangle"
+                       Visibility="Collapsed"
+                       Stroke="#9ED0FF"
+                       StrokeThickness="1.5"
+                       StrokeDashArray="5 3"
+                       Fill="#267AB8F4" />
+            <Border x:Name="SelectionSizeBadge"
+                    Visibility="Collapsed"
+                    Padding="8,4"
+                    CornerRadius="8"
+                    Background="#F01A2638"
+                    BorderBrush="#789ED0FF"
+                    BorderThickness="1">
+                <TextBlock x:Name="SelectionSizeText"
+                           Foreground="#F4F8FF"
+                           FontFamily="Consolas"
+                           FontSize="11" />
+            </Border>
+        </Canvas>
+
+        <Border x:Name="EmptyStatePanel"
+                IsHitTestVisible="False"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="Transparent"
+                Opacity="0.48">
+            <TextBlock Text="拖动空白处添加组件"
+                       Foreground="#B8C8DE"
+                       FontSize="12"
+                       HorizontalAlignment="Center" />
+        </Border>
+
+        <Grid x:Name="WidgetLibraryLayer"
+              Panel.ZIndex="20"
+              Visibility="Collapsed"
+              Background="#76000000"
+              MouseLeftButtonDown="WidgetLibraryLayer_MouseLeftButtonDown">
+            <Grid Margin="30,24,396,24">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Margin="4,0,4,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="LibraryPreviewTitleText"
+                                   Text="预览"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="LibraryPreviewMetaText"
+                                   Margin="10,2,0,0"
+                                   Foreground="#7185A5"
+                                   FontSize="11" />
+                    </StackPanel>
+                    <TextBlock x:Name="LibraryPreviewStatusText"
+                               Grid.Column="1"
+                               Foreground="#7185A5"
+                               FontSize="11"
+                               VerticalAlignment="Center" />
+                </Grid>
+
+                <Grid x:Name="LibraryPreviewViewport"
+                      Grid.Row="1"
+                      SizeChanged="LibraryPreviewViewport_SizeChanged">
+                    <TextBlock x:Name="LibraryPreviewEmptyText"
+                               Text="选择右侧组件查看"
+                               IsHitTestVisible="False"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="#7185A5"
+                               FontSize="12"
+                               Opacity="0.72" />
+                    <Border x:Name="LibraryPreviewFrame"
+                            Visibility="Collapsed"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            CornerRadius="16"
+                            ClipToBounds="True"
+                            Background="#F80C121C"
+                            BorderBrush="#667FA8DC"
+                            BorderThickness="1">
+                        <Grid x:Name="LibraryPreviewHost" />
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <Border Width="360"
+                    Margin="0,18,18,18"
+                    HorizontalAlignment="Right"
+                    CornerRadius="18"
+                    Background="#FC121A26"
+                    BorderBrush="#4D7899C0"
+                    BorderThickness="1"
+                    Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="组件库"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="18"
+                                       FontWeight="SemiBold" />
+                            <TextBlock x:Name="LibraryCountText"
+                                       Margin="10,2,0,0"
+                                       Foreground="#7185A5"
+                                       FontSize="11" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Content="×"
+                                Width="32"
+                                Height="30"
+                                Padding="0"
+                                ToolTip="关闭组件库"
+                                Style="{StaticResource ToolButtonStyle}"
+                                Click="CloseLibraryButton_Click" />
+                    </Grid>
+
+                    <Grid Grid.Row="1" Margin="0,16,0,12">
+                        <TextBox x:Name="LibrarySearchBox"
+                                 Height="34"
+                                 SpellCheck.IsEnabled="False"
+                                 Style="{StaticResource EditorTextBoxStyle}"
+                                 TextChanged="LibrarySearchBox_TextChanged" />
+                        <TextBlock x:Name="LibrarySearchHint"
+                                   Text="搜索组件名称"
+                                   Margin="12,0,0,0"
+                                   IsHitTestVisible="False"
+                                   VerticalAlignment="Center"
+                                   Foreground="#607491"
+                                   FontSize="11" />
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="LibraryItemsPanel" />
+                        </ScrollViewer>
+                        <TextBlock x:Name="LibraryEmptyText"
+                                   Text="还没有组件"
+                                   Visibility="Collapsed"
+                                   IsHitTestVisible="False"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="#667B9A"
+                                   FontSize="12" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border x:Name="ToastPanel"
+                Panel.ZIndex="30"
+                Visibility="Collapsed"
+                IsHitTestVisible="False"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Margin="0,22,0,0"
+                Padding="16,9"
+                CornerRadius="15"
+                Background="#F0232E42"
+                BorderBrush="#6A7FA8DC"
+                BorderThickness="1">
+            <TextBlock x:Name="ToastText" Foreground="{StaticResource TextPrimaryBrush}" />
+        </Border>
+
+        <Grid x:Name="WidgetEditorLayer"
+              Panel.ZIndex="20"
+              Visibility="Collapsed"
+              Background="#B8000000">
+            <Border Margin="40"
+                    MaxWidth="720"
+                    MaxHeight="540"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    CornerRadius="18"
+                    Background="#FC121A26"
+                    BorderBrush="#4D7899C0"
+                    BorderThickness="1"
+                    Padding="20">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="WidgetEditorTitleText"
+                                       Text="添加组件"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="18"
+                                       FontWeight="SemiBold" />
+                            <TextBlock x:Name="WidgetEditorMetaText"
+                                       Margin="12,2,0,0"
+                                       Foreground="#7F94B2"
+                                       FontSize="11" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Content="×"
+                                Width="32"
+                                Height="30"
+                                Padding="0"
+                                ToolTip="取消"
+                                Style="{StaticResource ToolButtonStyle}"
+                                Click="CancelEditorButton_Click" />
+                    </Grid>
+
+                    <Grid Grid.Row="1" Margin="0,18,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="组件代码"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="12" />
+                            <TextBlock x:Name="HtmlValidationText"
+                                       Grid.Column="1"
+                                       Margin="16,0,0,0"
+                                       HorizontalAlignment="Right"
+                                       Foreground="#9AB6D8"
+                                       FontSize="11"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                        <TextBox x:Name="HtmlEditor"
+                                 Grid.Row="1"
+                                 AcceptsReturn="True"
+                                 AcceptsTab="True"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 TextWrapping="NoWrap"
+                                 SpellCheck.IsEnabled="False"
+                                 FontFamily="Consolas, Microsoft YaHei"
+                                 FontSize="12.5"
+                                 Style="{StaticResource EditorTextBoxStyle}"
+                                 TextChanged="HtmlEditor_TextChanged" />
+                    </Grid>
+
+                    <Grid Grid.Row="2" Margin="0,16,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="取消"
+                                    MinWidth="82"
+                                    Style="{StaticResource ToolButtonStyle}"
+                                    Click="CancelEditorButton_Click" />
+                            <Button x:Name="ConfirmEditorButton"
+                                    Content="保存组件"
+                                    MinWidth="104"
+                                    ToolTip="添加或保存（Ctrl+Enter）"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Click="ConfirmEditorButton_Click" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

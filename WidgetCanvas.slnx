@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WidgetCanvas/WidgetCanvas.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WidgetCanvas.Tests/WidgetCanvas.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+</Solution>
