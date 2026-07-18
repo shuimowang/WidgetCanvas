@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using WidgetCanvas.Services;
 using WidgetCanvas.Windows;
 
 namespace WidgetCanvas
@@ -23,9 +24,23 @@ namespace WidgetCanvas
         private CancellationTokenSource? _commandCancellation;
         private Task? _commandListener;
         private TrayIconService? _trayIcon;
+        private AppSettingsService? _settingsService;
+        private GlobalHotkeyService? _hotkeyService;
+        private UpdateService? _updateService;
+
+        internal AppSettings Settings =>
+            _settingsService?.Settings ?? throw new InvalidOperationException("设置服务尚未初始化。");
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            if (UpdateInstaller.IsApplyRequest(e.Args))
+            {
+                base.OnStartup(e);
+                Environment.ExitCode = UpdateInstaller.Apply(e.Args);
+                Shutdown(Environment.ExitCode);
+                return;
+            }
+
             _instanceMutex = new Mutex(initiallyOwned: true, InstanceMutexName, out bool isFirstInstance);
             if (!isFirstInstance)
             {
@@ -37,6 +52,30 @@ namespace WidgetCanvas
             base.OnStartup(e);
             AppPaths.EnsureCreated();
             DispatcherUnhandledException += OnDispatcherUnhandledException;
+            _settingsService = new AppSettingsService(AppPaths.SettingsFilePath);
+            _updateService = new UpdateService();
+            _hotkeyService = new GlobalHotkeyService(ShowCanvas);
+            if (Settings.StartWithWindows)
+            {
+                try
+                {
+                    StartupService.SetEnabled(enabled: true);
+                }
+                catch (Exception ex)
+                {
+                    WriteDiagnosticLog("startup", ex);
+                }
+            }
+            try
+            {
+                ApplyHotkeySettings();
+            }
+            catch (Exception ex)
+            {
+                Settings.HotkeyEnabled = false;
+                SaveSettings();
+                WriteDiagnosticLog("hotkey", ex);
+            }
 
             _commandCancellation = new CancellationTokenSource();
             _commandListener = ListenForCommandsAsync(_commandCancellation.Token);
@@ -45,18 +84,24 @@ namespace WidgetCanvas
                 () => HtmlWidgetCanvasWindow.ShowLibraryWindow(activate: true),
                 componentName => HtmlWidgetCanvasWindow.ShowWidgetWindow(componentName, activate: true),
                 HtmlWidgetCanvasWindow.GetTrayEntries,
+                ShowSettings,
                 () =>
                 {
                     HtmlWidgetCanvasWindow.DisposeWindow();
                     Shutdown();
                 });
             HandleLaunchArguments(e.Args);
+            _ = CheckForUpdatesOnStartupAsync();
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
             _trayIcon?.Dispose();
             _trayIcon = null;
+            _hotkeyService?.Dispose();
+            _hotkeyService = null;
+            _updateService = null;
+            _settingsService = null;
             _commandCancellation?.Cancel();
             _commandCancellation?.Dispose();
             _commandCancellation = null;
@@ -80,6 +125,12 @@ namespace WidgetCanvas
 
         private void HandleLaunchArguments(string[] args)
         {
+            if (args.Any(arg => string.Equals(arg, "--settings", StringComparison.OrdinalIgnoreCase)))
+            {
+                ShowSettings();
+                return;
+            }
+
             string? componentName = GetOptionValue(args, "--widget", "-w", "/widget");
             if (!string.IsNullOrWhiteSpace(componentName))
             {
@@ -98,6 +149,9 @@ namespace WidgetCanvas
                 }
             }
 
+            if (args.Any(arg => string.Equals(arg, "--background", StringComparison.OrdinalIgnoreCase)))
+                return;
+
             ShowCanvas();
         }
 
@@ -111,6 +165,63 @@ namespace WidgetCanvas
         }
 
         private void Canvas_Closed(object? sender, EventArgs e) => Shutdown();
+
+        private void ShowSettings() => SettingsWindow.ShowWindow(this);
+
+        internal void SaveSettings() =>
+            (_settingsService ?? throw new InvalidOperationException("设置服务尚未初始化。")).Save();
+
+        internal void ApplyHotkeySettings() =>
+            (_hotkeyService ?? throw new InvalidOperationException("快捷键服务尚未初始化。"))
+                .Apply(Settings.HotkeyEnabled, Settings.Hotkey);
+
+        internal async Task<string> CheckForUpdatesAsync(Window? owner)
+        {
+            UpdateService updater = _updateService
+                ?? throw new InvalidOperationException("更新服务尚未初始化。");
+            UpdateCheckResult update = await updater.CheckAsync();
+            Settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
+            SaveSettings();
+
+            if (!update.IsUpdateAvailable)
+                return "当前已是最新版本 · " + update.CurrentVersion.ToString(3);
+
+            string stagedExecutable = await updater.DownloadAsync(update);
+            string prompt = $"WidgetCanvas {update.LatestVersion} 已下载并通过 SHA-256 校验。\n\n立即重启并安装吗？";
+            MessageBoxResult decision = owner == null
+                ? MessageBox.Show(prompt, "WidgetCanvas 更新", MessageBoxButton.YesNo, MessageBoxImage.Information)
+                : MessageBox.Show(owner, prompt, "WidgetCanvas 更新", MessageBoxButton.YesNo, MessageBoxImage.Information);
+            if (decision != MessageBoxResult.Yes)
+                return "新版本 " + update.LatestVersion.ToString(3) + " 已下载，稍后可再次检查并安装";
+
+            string currentExecutable = Environment.ProcessPath
+                ?? throw new InvalidOperationException("无法确定当前程序路径。");
+            UpdateInstaller.Start(stagedExecutable, currentExecutable);
+            HtmlWidgetCanvasWindow.DisposeWindow();
+            Shutdown();
+            return "正在安装更新…";
+        }
+
+        private async Task CheckForUpdatesOnStartupAsync()
+        {
+            if (!Settings.AutoUpdateEnabled)
+                return;
+            if (Settings.LastUpdateCheckUtc is DateTimeOffset lastCheck &&
+                DateTimeOffset.UtcNow - lastCheck < TimeSpan.FromHours(12))
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            try
+            {
+                await CheckForUpdatesAsync(owner: null);
+            }
+            catch (Exception ex)
+            {
+                WriteDiagnosticLog("update-check", ex);
+            }
+        }
 
         private async Task ListenForCommandsAsync(CancellationToken cancellationToken)
         {

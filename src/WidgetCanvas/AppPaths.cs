@@ -29,6 +29,10 @@ namespace WidgetCanvas
 
         public static string SettingsFolder { get; } = Path.Combine(LocalDataFolder, "Settings");
 
+        public static string SettingsFilePath { get; } = Path.Combine(SettingsFolder, "settings.json");
+
+        public static string UpdatesFolder { get; } = Path.Combine(LocalDataFolder, "Updates");
+
         public static string LogsFolder { get; } = Path.Combine(LocalDataFolder, "Logs");
 
         public static void EnsureCreated()
@@ -37,6 +41,7 @@ namespace WidgetCanvas
             Directory.CreateDirectory(WebView2DataFolder);
             Directory.CreateDirectory(StateFolder);
             Directory.CreateDirectory(SettingsFolder);
+            Directory.CreateDirectory(UpdatesFolder);
             Directory.CreateDirectory(LogsFolder);
         }
     }

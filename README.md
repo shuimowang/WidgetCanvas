@@ -36,9 +36,11 @@ Windows 10/11 x64 is supported. WidgetCanvas is self-contained and does not requ
 - Use the top-right `×` to actually exit and release WebView2 resources.
 - Double-click the tray icon or run `WidgetCanvas.exe` again to reopen the canvas.
 - Right-click the tray icon to open the canvas or component library, or launch any widget directly in its own window.
+- Open **Management Center** from the tray to configure automatic updates, start with Windows, and a global canvas hotkey.
 - Right-click a widget to edit, reload, lock, detach, archive, duplicate, or delete it.
 - Hold `Ctrl` while dragging a widget handle to detach it into a standalone window.
 - Use `WidgetCanvas.exe --widget "Widget title"` to open one widget directly by its HTML `<title>`.
+- Use `WidgetCanvas.exe --settings` to open Management Center, or `--background` to start in tray-only mode.
 
 ## Data locations
 
@@ -57,6 +59,8 @@ Machine-local state is kept out of Documents and cloud sync:
 ```
 
 Writes are debounced and atomic. The previous readable file is kept as a `.bak` backup.
+
+Application settings are stored in `%LocalAppData%\浮岛\Settings\settings.json`. Automatic updates are downloaded only from this repository's GitHub Releases and verified with the published SHA-256 checksum before installation.
 
 ## Widget host API
 

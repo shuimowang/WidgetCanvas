@@ -26,12 +26,14 @@ namespace WidgetCanvas
             Action showLibrary,
             Action<string> showWidget,
             Func<IReadOnlyList<HtmlWidgetTrayEntry>> getWidgets,
+            Action showSettings,
             Action exitApplication)
         {
             ArgumentNullException.ThrowIfNull(showCanvas);
             ArgumentNullException.ThrowIfNull(showLibrary);
             ArgumentNullException.ThrowIfNull(showWidget);
             ArgumentNullException.ThrowIfNull(getWidgets);
+            ArgumentNullException.ThrowIfNull(showSettings);
             ArgumentNullException.ThrowIfNull(exitApplication);
 
             _showCanvas = showCanvas;
@@ -44,6 +46,8 @@ namespace WidgetCanvas
             _libraryMenu = new System.Windows.Forms.ToolStripMenuItem("组件库");
             _menu.Items.Add(_canvasMenu);
             _menu.Items.Add(_libraryMenu);
+            _menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+            _menu.Items.Add("管理中心", null, (_, _) => showSettings());
             _menu.Items.Add("打开组件目录", null, (_, _) => OpenFolder(AppPaths.ComponentsFolder));
             _menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
             _menu.Items.Add("退出 WidgetCanvas", null, (_, _) => exitApplication());

@@ -1,0 +1,98 @@
+#nullable enable
+
+using System;
+using System.IO;
+using System.Text;
+using System.Text.Json;
+
+namespace WidgetCanvas.Services
+{
+    internal sealed class AppSettings
+    {
+        public bool AutoUpdateEnabled { get; set; } = true;
+
+        public bool StartWithWindows { get; set; }
+
+        public bool HotkeyEnabled { get; set; }
+
+        public string Hotkey { get; set; } = "Ctrl+Alt+W";
+
+        public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+    }
+
+    internal sealed class AppSettingsService
+    {
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            WriteIndented = true
+        };
+
+        public AppSettingsService(string filePath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+            FilePath = Path.GetFullPath(filePath);
+            Settings = Load();
+        }
+
+        public string FilePath { get; }
+
+        public AppSettings Settings { get; }
+
+        public void Save()
+        {
+            string? directory = Path.GetDirectoryName(FilePath);
+            if (string.IsNullOrWhiteSpace(directory))
+                throw new InvalidOperationException("设置文件缺少目录。");
+
+            Directory.CreateDirectory(directory);
+            string tempPath = FilePath + ".tmp";
+            string backupPath = FilePath + ".bak";
+            byte[] json = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(Settings, JsonOptions));
+            using (var stream = new FileStream(
+                tempPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                4096,
+                FileOptions.WriteThrough))
+            {
+                stream.Write(json);
+                stream.Flush(flushToDisk: true);
+            }
+            if (File.Exists(FilePath))
+                File.Copy(FilePath, backupPath, overwrite: true);
+            File.Move(tempPath, FilePath, overwrite: true);
+        }
+
+        private AppSettings Load()
+        {
+            foreach (string path in new[] { FilePath, FilePath + ".bak" })
+            {
+                try
+                {
+                    if (!File.Exists(path))
+                        continue;
+                    AppSettings? settings = JsonSerializer.Deserialize<AppSettings>(
+                        File.ReadAllText(path),
+                        JsonOptions);
+                    if (settings == null)
+                        continue;
+                    settings.Hotkey = string.IsNullOrWhiteSpace(settings.Hotkey)
+                        ? "Ctrl+Alt+W"
+                        : settings.Hotkey.Trim();
+                    return settings;
+                }
+                catch (JsonException)
+                {
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
+            return new AppSettings();
+        }
+    }
+}

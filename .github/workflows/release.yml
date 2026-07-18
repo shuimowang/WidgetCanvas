@@ -23,8 +23,15 @@ jobs:
         run: dotnet publish src/WidgetCanvas/WidgetCanvas.csproj -c Release -r win-x64 --self-contained true --no-restore -o artifacts/WidgetCanvas
       - name: Package
         shell: pwsh
-        run: Compress-Archive -Path artifacts/WidgetCanvas/* -DestinationPath artifacts/WidgetCanvas-win-x64.zip
+        run: |
+          Compress-Archive -Path artifacts/WidgetCanvas/* -DestinationPath artifacts/WidgetCanvas-win-x64.zip
+          Copy-Item artifacts/WidgetCanvas/WidgetCanvas.exe artifacts/WidgetCanvas-win-x64.exe
+          $hash = (Get-FileHash artifacts/WidgetCanvas-win-x64.exe -Algorithm SHA256).Hash
+          "$hash  WidgetCanvas-win-x64.exe" | Set-Content artifacts/WidgetCanvas-win-x64.exe.sha256 -Encoding ascii
       - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
-          files: artifacts/WidgetCanvas-win-x64.zip
+          files: |
+            artifacts/WidgetCanvas-win-x64.zip
+            artifacts/WidgetCanvas-win-x64.exe
+            artifacts/WidgetCanvas-win-x64.exe.sha256
