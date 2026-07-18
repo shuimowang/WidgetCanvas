@@ -36,11 +36,12 @@ WidgetCanvas 是一个面向 AI 创作的 Windows 桌面小组件画布。你只
 - 点击右上角 `×`：真正退出并释放 WebView2。
 - 双击托盘图标或再次运行 EXE：重新显示浮岛。
 - 右键托盘图标：进入画布或组件库，也可直接把任意组件显示为独立窗口。
-- 从托盘打开“管理中心”：配置自动更新、WebDAV 同步、开机启动和显示画布的全局快捷键。
+- 从托盘打开“管理中心”：配置自动更新、WebDAV 同步、登录后驻留托盘和显示画布的全局快捷键。
 - 组件右键：编辑、重新加载、锁定、弹出、收进组件库、复制或永久删除。
 - 按住 `Ctrl` 拖动组件手柄：弹出为独立组件窗口。
 - `WidgetCanvas.exe --widget "组件标题"`：按 HTML `<title>` 直接打开某个组件。
 - `WidgetCanvas.exe --settings`：直接打开管理中心；`--background`：只在托盘驻留。
+- `WidgetCanvas.exe --exit`：真正退出应用并释放全部组件窗口与 WebView2。
 
 ## 外部自动化
 
@@ -50,6 +51,7 @@ Quicker 动作或脚本无需启动界面即可读取当前组件标题：
 WidgetCanvas.exe --list-widgets --output "%TEMP%\WidgetCanvas-widgets.json"
 WidgetCanvas.exe --widget "组件标题"
 WidgetCanvas.exe --settings
+WidgetCanvas.exe --exit
 ```
 
 组件目录变动后，应用会原子更新 `%LocalAppData%\浮岛\Integration\widgets.json`，再触发 `Local\WidgetCanvas.ComponentsChanged`。JSON 结构和推荐的 Quicker 右键菜单流程见[外部集成文档](docs/external-integration.zh-CN.md)。

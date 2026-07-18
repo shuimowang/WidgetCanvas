@@ -65,26 +65,39 @@ public sealed class AppServicesTests : IDisposable
     }
 
     [Fact]
-    public void UpdateReleaseParserFindsExecutableAndChecksumAssets()
+    public void UpdateReleaseParserBuildsStableAssetUrlsFromLatestRedirect()
     {
-        using JsonDocument document = JsonDocument.Parse("""
-            {
-              "tag_name": "v1.4.2",
-              "html_url": "https://github.com/shuimowang/WidgetCanvas/releases/tag/v1.4.2",
-              "assets": [
-                { "name": "WidgetCanvas-win-x64.zip", "browser_download_url": "https://example.invalid/app.zip" },
-                { "name": "WidgetCanvas-win-x64.exe", "browser_download_url": "https://example.invalid/app.exe" },
-                { "name": "WidgetCanvas-win-x64.exe.sha256", "browser_download_url": "https://example.invalid/app.sha256" }
-              ]
-            }
-            """);
-
-        UpdateCheckResult result = UpdateService.ParseRelease(document.RootElement, new Version(1, 3, 0, 0));
+        UpdateCheckResult result = UpdateService.ParseLatestReleaseUri(
+            new Uri("https://github.com/shuimowang/WidgetCanvas/releases/tag/v1.4.2"),
+            new Version(1, 3, 0, 0));
 
         Assert.True(result.IsUpdateAvailable);
         Assert.Equal(new Version(1, 4, 2), result.LatestVersion);
-        Assert.Equal("https://example.invalid/app.exe", result.DownloadUrl);
-        Assert.Equal("https://example.invalid/app.sha256", result.ChecksumUrl);
+        Assert.Equal(
+            "https://github.com/shuimowang/WidgetCanvas/releases/download/v1.4.2/WidgetCanvas-win-x64.exe",
+            result.DownloadUrl);
+        Assert.Equal(
+            "https://github.com/shuimowang/WidgetCanvas/releases/download/v1.4.2/WidgetCanvas-win-x64.exe.sha256",
+            result.ChecksumUrl);
+    }
+
+    [Theory]
+    [InlineData("https://github.com/shuimowang/WidgetCanvas/releases")]
+    [InlineData("https://example.com/shuimowang/WidgetCanvas/releases/tag/v1.4.2")]
+    [InlineData("https://github.com/shuimowang/WidgetCanvas/releases/tag/latest")]
+    public void UpdateReleaseParserRejectsUnexpectedRedirects(string url)
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            UpdateService.ParseLatestReleaseUri(new Uri(url), new Version(1, 3, 0)));
+    }
+
+    [Theory]
+    [InlineData("--exit")]
+    [InlineData("--EXIT")]
+    public void ExitArgumentIsCaseInsensitive(string argument)
+    {
+        Assert.True(App.IsExitRequest([argument]));
+        Assert.False(App.IsExitRequest(["--background"]));
     }
 
     [Fact]

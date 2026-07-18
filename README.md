@@ -36,11 +36,12 @@ Windows 10/11 x64 is supported. WidgetCanvas is self-contained and does not requ
 - Use the top-right `×` to actually exit and release WebView2 resources.
 - Double-click the tray icon or run `WidgetCanvas.exe` again to reopen the canvas.
 - Right-click the tray icon to open the canvas or component library, or launch any widget directly in its own window.
-- Open **Management Center** from the tray to configure automatic updates, WebDAV sync, start with Windows, and a global canvas hotkey.
+- Open **Management Center** from the tray to configure automatic updates, WebDAV sync, launch to the tray at sign-in, and a global canvas hotkey.
 - Right-click a widget to edit, reload, lock, detach, archive, duplicate, or delete it.
 - Hold `Ctrl` while dragging a widget handle to detach it into a standalone window.
 - Use `WidgetCanvas.exe --widget "Widget title"` to open one widget directly by its HTML `<title>`.
 - Use `WidgetCanvas.exe --settings` to open Management Center, or `--background` to start in tray-only mode.
+- Use `WidgetCanvas.exe --exit` to quit the application and release all widget windows and WebView2 instances.
 
 ## External automation
 
@@ -50,6 +51,7 @@ Quicker actions and scripts can query the current titles without starting the UI
 WidgetCanvas.exe --list-widgets --output "%TEMP%\WidgetCanvas-widgets.json"
 WidgetCanvas.exe --widget "Widget title"
 WidgetCanvas.exe --settings
+WidgetCanvas.exe --exit
 ```
 
 Catalog changes atomically update `%LocalAppData%\浮岛\Integration\widgets.json` and signal `Local\WidgetCanvas.ComponentsChanged`. See [External integration](docs/external-integration.md) for the JSON schema and recommended Quicker menu flow.

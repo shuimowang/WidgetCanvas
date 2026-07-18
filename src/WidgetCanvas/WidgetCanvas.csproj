@@ -14,7 +14,7 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <PublishReadyToRun>true</PublishReadyToRun>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
     <Authors>shuimowang</Authors>
     <Product>WidgetCanvas</Product>
     <Description>Turn AI-generated HTML into live Windows desktop widgets.</Description>

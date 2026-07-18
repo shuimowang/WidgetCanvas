@@ -62,6 +62,12 @@ namespace WidgetCanvas
             }
 
             base.OnStartup(e);
+            if (IsExitRequest(e.Args))
+            {
+                Shutdown();
+                return;
+            }
+
             AppPaths.EnsureCreated();
             DispatcherUnhandledException += OnDispatcherUnhandledException;
             _settingsService = new AppSettingsService(AppPaths.SettingsFilePath);
@@ -147,6 +153,13 @@ namespace WidgetCanvas
 
         private void HandleLaunchArguments(string[] args)
         {
+            if (IsExitRequest(args))
+            {
+                HtmlWidgetCanvasWindow.DisposeWindow();
+                Shutdown();
+                return;
+            }
+
             if (args.Any(arg => string.Equals(arg, "--settings", StringComparison.OrdinalIgnoreCase)))
             {
                 ShowSettings();
@@ -176,6 +189,9 @@ namespace WidgetCanvas
 
             ShowCanvas();
         }
+
+        internal static bool IsExitRequest(string[] args) =>
+            args.Any(arg => string.Equals(arg, "--exit", StringComparison.OrdinalIgnoreCase));
 
         private void ShowCanvas()
         {

@@ -22,6 +22,9 @@ WidgetCanvas.exe --settings
 
 # 只驻留托盘
 WidgetCanvas.exe --background
+
+# 真正退出应用（等同浮岛右上角 ×）
+WidgetCanvas.exe --exit
 ```
 
 `--list-widgets` 直接读取已经落盘的组件目录，无论主程序是否正在运行都能使用。成功退出码为 `0`，失败为 `2`。组件标题具有唯一性；找不到标题或存在歧义时不会误开其他组件。

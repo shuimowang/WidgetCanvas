@@ -229,7 +229,7 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <TextBlock Text="开机启动" Style="{StaticResource TitleStyle}" />
+                                        <TextBlock Text="登录后驻留托盘" Style="{StaticResource TitleStyle}" />
                                         <TextBlock Text="登录 Windows 后仅驻留系统托盘，不会自动弹出全屏画布。"
                                                    Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
                                     </StackPanel>

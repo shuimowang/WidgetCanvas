@@ -7,7 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -28,7 +27,7 @@ namespace WidgetCanvas.Services
         public const string ProjectUrl = "https://github.com/shuimowang/WidgetCanvas";
         public const string ReleasesUrl = ProjectUrl + "/releases";
         public const string FeedbackUrl = ProjectUrl + "/issues/new";
-        private const string LatestReleaseApi = "https://api.github.com/repos/shuimowang/WidgetCanvas/releases/latest";
+        private const string LatestReleaseUrl = ReleasesUrl + "/latest";
         private const string ExecutableAssetName = "WidgetCanvas-win-x64.exe";
         private const string ChecksumAssetName = ExecutableAssetName + ".sha256";
         private const long MaximumExecutableBytes = 200L * 1024 * 1024;
@@ -40,30 +39,45 @@ namespace WidgetCanvas.Services
 
         public async Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken = default)
         {
-            using HttpResponseMessage response = await HttpClient.GetAsync(LatestReleaseApi, cancellationToken);
-            response.EnsureSuccessStatusCode();
-            await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            return ParseRelease(document.RootElement, CurrentVersion);
+            // GitHub REST API gives unauthenticated clients a small shared rate limit.
+            // The public /releases/latest page redirects to the current release tag and
+            // provides everything the updater needs without consuming that quota.
+            using HttpResponseMessage response = await HttpClient.GetAsync(
+                LatestReleaseUrl,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException(
+                    $"检查更新失败：GitHub 返回 HTTP {(int)response.StatusCode}（{response.ReasonPhrase}）。");
+            }
+
+            Uri releaseUri = response.RequestMessage?.RequestUri
+                ?? throw new InvalidDataException("无法确定 GitHub 最新版本地址。");
+            return ParseLatestReleaseUri(releaseUri, CurrentVersion);
         }
 
-        internal static UpdateCheckResult ParseRelease(JsonElement root, Version currentVersion)
+        internal static UpdateCheckResult ParseLatestReleaseUri(Uri releaseUri, Version currentVersion)
         {
-            string tag = root.GetProperty("tag_name").GetString() ?? string.Empty;
+            ArgumentNullException.ThrowIfNull(releaseUri);
+            const string releaseTagPath = "/releases/tag/";
+            int tagIndex = releaseUri.AbsolutePath.IndexOf(releaseTagPath, StringComparison.OrdinalIgnoreCase);
+            if (!string.Equals(releaseUri.Host, "github.com", StringComparison.OrdinalIgnoreCase) || tagIndex < 0)
+                throw new InvalidDataException("GitHub 没有返回可用的正式版本。");
+
+            string tag = Uri.UnescapeDataString(releaseUri.AbsolutePath[(tagIndex + releaseTagPath.Length)..])
+                .Trim('/');
             if (!Version.TryParse(tag.Trim().TrimStart('v', 'V'), out Version? latestVersion))
                 throw new InvalidDataException("GitHub Release 的版本号无效：" + tag);
 
-            string releaseUrl = root.TryGetProperty("html_url", out JsonElement htmlUrl)
-                ? htmlUrl.GetString() ?? ReleasesUrl
-                : ReleasesUrl;
-            string downloadUrl = FindAssetUrl(root, ExecutableAssetName);
-            string checksumUrl = FindAssetUrl(root, ChecksumAssetName);
+            string releaseUrl = ProjectUrl + releaseTagPath + Uri.EscapeDataString(tag);
+            string assetRoot = ProjectUrl + "/releases/download/" + Uri.EscapeDataString(tag) + "/";
             return new UpdateCheckResult(
                 NormalizeVersion(currentVersion),
                 NormalizeVersion(latestVersion),
                 releaseUrl,
-                downloadUrl,
-                checksumUrl);
+                assetRoot + ExecutableAssetName,
+                assetRoot + ChecksumAssetName);
         }
 
         public async Task<string> DownloadAsync(
@@ -149,26 +163,7 @@ namespace WidgetCanvas.Services
                 Timeout = TimeSpan.FromSeconds(30)
             };
             client.DefaultRequestHeaders.UserAgent.ParseAdd("WidgetCanvas/" + CurrentVersion.ToString(3));
-            client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
             return client;
-        }
-
-        private static string FindAssetUrl(JsonElement root, string name)
-        {
-            if (!root.TryGetProperty("assets", out JsonElement assets) || assets.ValueKind != JsonValueKind.Array)
-                return string.Empty;
-            foreach (JsonElement asset in assets.EnumerateArray())
-            {
-                if (!asset.TryGetProperty("name", out JsonElement assetName) ||
-                    !string.Equals(assetName.GetString(), name, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-                return asset.TryGetProperty("browser_download_url", out JsonElement url)
-                    ? url.GetString() ?? string.Empty
-                    : string.Empty;
-            }
-            return string.Empty;
         }
 
         private static Version NormalizeVersion(Version version) =>

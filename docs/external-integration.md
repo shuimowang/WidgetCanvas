@@ -24,6 +24,9 @@ WidgetCanvas.exe --settings
 
 # Start in tray-only mode
 WidgetCanvas.exe --background
+
+# Quit the application (equivalent to the canvas top-right ×)
+WidgetCanvas.exe --exit
 ```
 
 `--list-widgets` reads the persisted catalog directly and exits, so it works whether the main application is running or not. It returns exit code `0` on success and `2` on failure. Component titles are unique; a missing or ambiguous `--widget` title is reported instead of opening the wrong component.
