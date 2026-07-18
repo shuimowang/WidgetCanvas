@@ -71,6 +71,25 @@ namespace WidgetCanvas.Windows
                 DragMove();
         }
 
+        private void SettingsSection_Changed(object sender, RoutedEventArgs e)
+        {
+            if (GeneralPage == null || SyncPage == null || UpdatePage == null || AboutPage == null)
+                return;
+            string section = (sender as FrameworkElement)?.Tag as string ?? "General";
+            GeneralPage.Visibility = section == "General" ? Visibility.Visible : Visibility.Collapsed;
+            SyncPage.Visibility = section == "Sync" ? Visibility.Visible : Visibility.Collapsed;
+            UpdatePage.Visibility = section == "Update" ? Visibility.Visible : Visibility.Collapsed;
+            AboutPage.Visibility = section == "About" ? Visibility.Visible : Visibility.Collapsed;
+            if (section == "General")
+                GeneralPage.ScrollToTop();
+            else if (section == "Sync")
+                SyncPage.ScrollToTop();
+            else if (section == "Update")
+                UpdatePage.ScrollToTop();
+            else
+                AboutPage.ScrollToTop();
+        }
+
         private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
         private void AutoUpdateToggle_Changed(object sender, RoutedEventArgs e)

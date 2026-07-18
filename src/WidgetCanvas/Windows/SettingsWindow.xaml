@@ -2,10 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="WidgetCanvas 管理中心"
-        Width="720"
-        Height="720"
-        MinWidth="640"
-        MinHeight="600"
+        Width="780"
+        Height="620"
+        MinWidth="700"
+        MinHeight="540"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResizeWithGrip"
@@ -32,6 +32,45 @@
             <Setter Property="Foreground" Value="#8FA1B8" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="PageTitleStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#F3F7FC" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="NavItemStyle" TargetType="RadioButton">
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="Foreground" Value="#AAB8CA" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="NavBackground" Background="Transparent" CornerRadius="8">
+                            <Grid>
+                                <Border x:Name="Accent" Width="3" Margin="2,8,0,8"
+                                        HorizontalAlignment="Left" Background="#53A0F6"
+                                        CornerRadius="2" Visibility="Collapsed" />
+                                <ContentPresenter Margin="17,0,10,0"
+                                                  VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavBackground" Property="Background" Value="#1B2A3D" />
+                                <Setter Property="Foreground" Value="#DCE7F5" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="NavBackground" Property="Background" Value="#22344A" />
+                                <Setter TargetName="Accent" Property="Visibility" Value="Visible" />
+                                <Setter Property="Foreground" Value="#F3F7FC" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style x:Key="ButtonStyle" TargetType="Button">
             <Setter Property="Foreground" Value="#E7EEF8" />
@@ -149,197 +188,244 @@
                 </Grid>
             </Border>
 
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="20,18,20,20">
-                    <Border Style="{StaticResource CardStyle}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="开源项目" Style="{StaticResource TitleStyle}" />
-                                <TextBlock Text="github.com/shuimowang/WidgetCanvas"
-                                           Style="{StaticResource HintStyle}" Margin="0,5,0,0" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button Content="项目主页" Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
-                                        Click="ProjectButton_Click" />
-                                <Button Content="版本发布" Style="{StaticResource ButtonStyle}"
-                                        Margin="0,0,8,0" Click="ReleasesButton_Click" />
-                                <Button Content="反馈问题" Style="{StaticResource ButtonStyle}"
-                                        Click="FeedbackButton_Click" />
-                            </StackPanel>
-                        </Grid>
-                    </Border>
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="156" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-                    <Border Style="{StaticResource CardStyle}">
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+                <Border Background="#121C29" BorderBrush="#26364A" BorderThickness="0,0,1,0"
+                        CornerRadius="0,0,0,13">
+                    <StackPanel Margin="12,18,12,12">
+                        <TextBlock Text="设置" Foreground="#687C95" FontSize="10.5"
+                                   Margin="16,0,0,8" />
+                        <RadioButton Content="常规" Tag="General" GroupName="SettingsSections"
+                                     IsChecked="True" Style="{StaticResource NavItemStyle}"
+                                     Checked="SettingsSection_Changed" />
+                        <RadioButton Content="多设备同步" Tag="Sync" GroupName="SettingsSections"
+                                     Style="{StaticResource NavItemStyle}"
+                                     Checked="SettingsSection_Changed" />
+                        <RadioButton Content="软件更新" Tag="Update" GroupName="SettingsSections"
+                                     Style="{StaticResource NavItemStyle}"
+                                     Checked="SettingsSection_Changed" />
+                        <RadioButton Content="关于与数据" Tag="About" GroupName="SettingsSections"
+                                     Style="{StaticResource NavItemStyle}"
+                                     Checked="SettingsSection_Changed" />
+                    </StackPanel>
+                </Border>
+
+                <Grid Grid.Column="1">
+                    <ScrollViewer x:Name="GeneralPage" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="24,20,24,24">
+                            <TextBlock Text="常规" Style="{StaticResource PageTitleStyle}" />
+                            <TextBlock Text="管理应用启动方式和快速唤出画布的快捷键。"
+                                       Style="{StaticResource HintStyle}" Margin="0,5,0,18" />
+
+                            <Border Style="{StaticResource CardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="开机启动" Style="{StaticResource TitleStyle}" />
+                                        <TextBlock Text="登录 Windows 后仅驻留系统托盘，不会自动弹出全屏画布。"
+                                                   Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
+                                    </StackPanel>
+                                    <ToggleButton x:Name="StartupToggle" Grid.Column="1"
+                                                  Style="{StaticResource SwitchStyle}"
+                                                  Checked="StartupToggle_Changed"
+                                                  Unchecked="StartupToggle_Changed" />
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource CardStyle}" Margin="0">
                                 <StackPanel>
-                                    <TextBlock Text="自动更新" Style="{StaticResource TitleStyle}" />
-                                    <TextBlock Text="启动后检查 GitHub Release；发现新版本时下载、校验，并询问是否重启安装。"
-                                               Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="全局快捷键" Style="{StaticResource TitleStyle}" />
+                                            <TextBlock Text="无论当前在哪个程序，都能立即显示画布。"
+                                                       Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
+                                        </StackPanel>
+                                        <ToggleButton x:Name="HotkeyToggle" Grid.Column="1"
+                                                      Style="{StaticResource SwitchStyle}"
+                                                      Checked="HotkeyToggle_Changed"
+                                                      Unchecked="HotkeyToggle_Changed" />
+                                    </Grid>
+                                    <Grid Margin="0,14,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="HotkeyTextBox" Style="{StaticResource InputStyle}"
+                                                 IsReadOnly="True" ToolTip="点击后按下新的组合键"
+                                                 PreviewKeyDown="HotkeyTextBox_PreviewKeyDown" />
+                                        <Button Grid.Column="1" Content="应用快捷键" Margin="10,0,0,0"
+                                                Style="{StaticResource ButtonStyle}"
+                                                Click="ApplyHotkeyButton_Click" />
+                                    </Grid>
                                 </StackPanel>
-                                <ToggleButton x:Name="AutoUpdateToggle" Grid.Column="1"
-                                              Style="{StaticResource SwitchStyle}"
-                                              Checked="AutoUpdateToggle_Changed"
-                                              Unchecked="AutoUpdateToggle_Changed" />
-                            </Grid>
-                            <Grid Margin="0,14,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock x:Name="UpdateStatusText" Style="{StaticResource HintStyle}"
-                                           VerticalAlignment="Center" />
-                                <Button x:Name="CheckUpdateButton" Grid.Column="1" Content="检查更新"
-                                        Style="{StaticResource PrimaryButtonStyle}" Click="CheckUpdateButton_Click" />
-                            </Grid>
+                            </Border>
                         </StackPanel>
-                    </Border>
+                    </ScrollViewer>
 
-                    <Border Style="{StaticResource CardStyle}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="开机启动" Style="{StaticResource TitleStyle}" />
-                                <TextBlock Text="登录 Windows 后仅驻留系统托盘，不会自动弹出全屏画布。"
-                                           Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
-                            </StackPanel>
-                            <ToggleButton x:Name="StartupToggle" Grid.Column="1"
-                                          Style="{StaticResource SwitchStyle}"
-                                          Checked="StartupToggle_Changed"
-                                          Unchecked="StartupToggle_Changed" />
-                        </Grid>
-                    </Border>
+                    <ScrollViewer x:Name="SyncPage" Visibility="Collapsed"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="24,20,24,24">
+                            <TextBlock Text="多设备同步" Style="{StaticResource PageTitleStyle}" />
+                            <TextBlock Text="通过你自己的 WebDAV 服务同步组件，不经过 WidgetCanvas 服务器。"
+                                       Style="{StaticResource HintStyle}" Margin="0,5,0,18" />
 
-                    <Border Style="{StaticResource CardStyle}">
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource CardStyle}" Margin="0">
                                 <StackPanel>
-                                    <TextBlock Text="全局快捷键" Style="{StaticResource TitleStyle}" />
-                                    <TextBlock Text="无论当前在哪个程序，都能立即显示画布。"
-                                               Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="WebDAV 自动同步" Style="{StaticResource TitleStyle}" />
+                                            <TextBlock Text="同步组件代码和组件自身数据；窗口布局、缓存和应用设置保留在本机。"
+                                                       Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
+                                        </StackPanel>
+                                        <ToggleButton x:Name="WebDavAutoSyncToggle" Grid.Column="1"
+                                                      Style="{StaticResource SwitchStyle}"
+                                                      ToolTip="启动、组件保存后及每 5 分钟自动同步" />
+                                    </Grid>
+
+                                    <TextBlock Text="WebDAV 目录地址" Style="{StaticResource HintStyle}" Margin="0,15,0,5" />
+                                    <TextBox x:Name="WebDavUrlTextBox" Style="{StaticResource InputStyle}"
+                                             ToolTip="例如：https://example.com/dav/WidgetCanvas/" />
+
+                                    <Grid Margin="0,11,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="用户名" Style="{StaticResource HintStyle}" Margin="0,0,0,5" />
+                                            <TextBox x:Name="WebDavUsernameTextBox" Style="{StaticResource InputStyle}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="密码 / 应用专用密码" Style="{StaticResource HintStyle}" Margin="0,0,0,5" />
+                                            <PasswordBox x:Name="WebDavPasswordBox"
+                                                         Style="{StaticResource PasswordInputStyle}"
+                                                         PasswordChar="●" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Text="远端文件：widgetcanvas-sync-v1.json · 推荐 HTTPS · 密码由 Windows 当前用户加密保存。"
+                                               Style="{StaticResource HintStyle}" Margin="0,10,0,0" />
+                                    <Grid Margin="0,14,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="WebDavStatusText" Style="{StaticResource HintStyle}"
+                                                   VerticalAlignment="Center" Margin="0,0,12,0" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                            <Button x:Name="TestWebDavButton" Content="测试连接"
+                                                    Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
+                                                    Click="TestWebDavButton_Click" />
+                                            <Button x:Name="SaveWebDavButton" Content="保存"
+                                                    Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
+                                                    Click="SaveWebDavButton_Click" />
+                                            <Button x:Name="SyncWebDavButton" Content="立即同步"
+                                                    Style="{StaticResource PrimaryButtonStyle}"
+                                                    Click="SyncWebDavButton_Click" />
+                                        </StackPanel>
+                                    </Grid>
                                 </StackPanel>
-                                <ToggleButton x:Name="HotkeyToggle" Grid.Column="1"
-                                              Style="{StaticResource SwitchStyle}"
-                                              Checked="HotkeyToggle_Changed"
-                                              Unchecked="HotkeyToggle_Changed" />
-                            </Grid>
-                            <Grid Margin="0,14,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="HotkeyTextBox"
-                                         Height="36" Padding="11,7"
-                                         Foreground="#E7EEF8" Background="#101925"
-                                         BorderBrush="#354B67" BorderThickness="1"
-                                         FontSize="12" IsReadOnly="True"
-                                         ToolTip="点击后按下新的组合键"
-                                         PreviewKeyDown="HotkeyTextBox_PreviewKeyDown" />
-                                <Button Grid.Column="1" Content="应用快捷键" Margin="10,0,0,0"
-                                        Style="{StaticResource ButtonStyle}" Click="ApplyHotkeyButton_Click" />
-                            </Grid>
+                            </Border>
                         </StackPanel>
-                    </Border>
+                    </ScrollViewer>
 
-                    <Border Style="{StaticResource CardStyle}">
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+                    <ScrollViewer x:Name="UpdatePage" Visibility="Collapsed"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="24,20,24,24">
+                            <TextBlock Text="软件更新" Style="{StaticResource PageTitleStyle}" />
+                            <TextBlock Text="保持 WidgetCanvas 最新，并核对每次下载的完整性。"
+                                       Style="{StaticResource HintStyle}" Margin="0,5,0,18" />
+
+                            <Border Style="{StaticResource CardStyle}" Margin="0">
                                 <StackPanel>
-                                    <TextBlock Text="WebDAV 多设备同步" Style="{StaticResource TitleStyle}" />
-                                    <TextBlock Text="同步组件代码和组件自身数据；不同步窗口布局、WebView2 缓存和应用设置。"
-                                               Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="自动检查更新" Style="{StaticResource TitleStyle}" />
+                                            <TextBlock Text="启动后检查 GitHub Release；下载完成后校验 SHA-256，再询问是否重启安装。"
+                                                       Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
+                                        </StackPanel>
+                                        <ToggleButton x:Name="AutoUpdateToggle" Grid.Column="1"
+                                                      Style="{StaticResource SwitchStyle}"
+                                                      Checked="AutoUpdateToggle_Changed"
+                                                      Unchecked="AutoUpdateToggle_Changed" />
+                                    </Grid>
+                                    <Grid Margin="0,16,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="UpdateStatusText" Style="{StaticResource HintStyle}"
+                                                   VerticalAlignment="Center" />
+                                        <Button x:Name="CheckUpdateButton" Grid.Column="1" Content="检查更新"
+                                                Style="{StaticResource PrimaryButtonStyle}"
+                                                Click="CheckUpdateButton_Click" />
+                                    </Grid>
                                 </StackPanel>
-                                <ToggleButton x:Name="WebDavAutoSyncToggle" Grid.Column="1"
-                                              Style="{StaticResource SwitchStyle}"
-                                              ToolTip="启动、组件保存后及每 5 分钟自动同步" />
-                            </Grid>
-
-                            <TextBlock Text="WebDAV 目录地址" Style="{StaticResource HintStyle}" Margin="0,15,0,5" />
-                            <TextBox x:Name="WebDavUrlTextBox" Style="{StaticResource InputStyle}"
-                                     ToolTip="例如：https://example.com/dav/WidgetCanvas/" />
-
-                            <Grid Margin="0,11,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="12" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="用户名" Style="{StaticResource HintStyle}" Margin="0,0,0,5" />
-                                    <TextBox x:Name="WebDavUsernameTextBox" Style="{StaticResource InputStyle}" />
-                                </StackPanel>
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Text="密码 / 应用专用密码" Style="{StaticResource HintStyle}" Margin="0,0,0,5" />
-                                    <PasswordBox x:Name="WebDavPasswordBox"
-                                                 Style="{StaticResource PasswordInputStyle}"
-                                                 PasswordChar="●" />
-                                </StackPanel>
-                            </Grid>
-
-                            <TextBlock Text="远端使用 widgetcanvas-sync-v1.json；推荐 HTTPS。密码仅以当前 Windows 用户可解密的形式保存在本机。"
-                                       Style="{StaticResource HintStyle}" Margin="0,10,0,0" />
-                            <Grid Margin="0,14,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock x:Name="WebDavStatusText" Style="{StaticResource HintStyle}"
-                                           VerticalAlignment="Center" Margin="0,0,12,0" />
-                                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <Button x:Name="TestWebDavButton" Content="测试连接"
-                                            Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
-                                            Click="TestWebDavButton_Click" />
-                                    <Button x:Name="SaveWebDavButton" Content="保存"
-                                            Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
-                                            Click="SaveWebDavButton_Click" />
-                                    <Button x:Name="SyncWebDavButton" Content="立即同步"
-                                            Style="{StaticResource PrimaryButtonStyle}"
-                                            Click="SyncWebDavButton_Click" />
-                                </StackPanel>
-                            </Grid>
+                            </Border>
                         </StackPanel>
-                    </Border>
+                    </ScrollViewer>
 
-                    <Border Style="{StaticResource CardStyle}" Margin="0">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="本地数据" Style="{StaticResource TitleStyle}" />
-                                <TextBlock Text="组件源码保存在 Documents；设置、缓存和日志保存在 LocalAppData。"
-                                           Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button Content="组件目录" Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
-                                        Click="ComponentsButton_Click" />
-                                <Button Content="日志目录" Style="{StaticResource ButtonStyle}"
-                                        Click="LogsButton_Click" />
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
+                    <ScrollViewer x:Name="AboutPage" Visibility="Collapsed"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="24,20,24,24">
+                            <TextBlock Text="关于与数据" Style="{StaticResource PageTitleStyle}" />
+                            <TextBlock Text="查看开源项目、反馈问题，以及管理本机数据目录。"
+                                       Style="{StaticResource HintStyle}" Margin="0,5,0,18" />
+
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="开源项目" Style="{StaticResource TitleStyle}" />
+                                    <TextBlock Text="github.com/shuimowang/WidgetCanvas"
+                                               Style="{StaticResource HintStyle}" Margin="0,5,0,14" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="项目主页" Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
+                                                Click="ProjectButton_Click" />
+                                        <Button Content="版本发布" Style="{StaticResource ButtonStyle}"
+                                                Margin="0,0,8,0" Click="ReleasesButton_Click" />
+                                        <Button Content="反馈问题" Style="{StaticResource ButtonStyle}"
+                                                Click="FeedbackButton_Click" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardStyle}" Margin="0">
+                                <StackPanel>
+                                    <TextBlock Text="本地数据" Style="{StaticResource TitleStyle}" />
+                                    <TextBlock Text="组件源码保存在 Documents；设置、缓存、同步基线和日志保存在 LocalAppData。"
+                                               Style="{StaticResource HintStyle}" Margin="0,5,0,14" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="组件目录" Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
+                                                Click="ComponentsButton_Click" />
+                                        <Button Content="日志目录" Style="{StaticResource ButtonStyle}"
+                                                Click="LogsButton_Click" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
         </Grid>
     </Border>
 </Window>
