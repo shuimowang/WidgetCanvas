@@ -44,6 +44,7 @@ namespace WidgetCanvas.Windows
         private bool _bridgeInstalled;
         private bool _browserStartDeferred;
         private bool _browserReadyForDock;
+        private bool _hideAfterInitialLoad;
         private bool _closed;
         private int _transitionVersion;
         private int _dockRegistrationVersion;
@@ -144,6 +145,14 @@ namespace WidgetCanvas.Windows
             if (activate)
                 Activate();
             ScheduleDockRegistration();
+        }
+
+        internal void ShowRestoredAfterSync(bool wasVisible, bool activate)
+        {
+            _hideAfterInitialLoad = !wasVisible;
+            if (_hideAfterInitialLoad)
+                Opacity = 0;
+            ShowAndActivate(wasVisible && activate);
         }
 
         /// <summary>
@@ -262,10 +271,18 @@ namespace WidgetCanvas.Windows
             if (_loaded)
                 return;
             _loaded = true;
-            Opacity = 1;
+            if (!_hideAfterInitialLoad)
+                Opacity = 1;
             if (!_browserStartDeferred)
                 await InitializeBrowserAsync();
             SaveWindowLayout();
+            if (_hideAfterInitialLoad && !_closed && !_allowClose)
+            {
+                _hideAfterInitialLoad = false;
+                SuspendDockRegistration();
+                base.Hide();
+                Opacity = 1;
+            }
         }
 
         private async Task InitializeBrowserAsync()

@@ -22,6 +22,11 @@ public sealed class AppServicesTests : IDisposable
         service.Settings.AutoUpdateEnabled = false;
         service.Settings.HotkeyEnabled = true;
         service.Settings.Hotkey = "Ctrl+Shift+F9";
+        service.Settings.WebDavAutoSyncEnabled = true;
+        service.Settings.WebDavUrl = "https://dav.example.test/widgets/";
+        service.Settings.WebDavUsername = "alice";
+        service.Settings.WebDavProtectedPassword = "encrypted";
+        service.Settings.WebDavLastError = "timeout";
         service.Save();
 
         service.Settings.Hotkey = "Alt+F2";
@@ -32,6 +37,11 @@ public sealed class AppServicesTests : IDisposable
         Assert.False(recovered.Settings.AutoUpdateEnabled);
         Assert.True(recovered.Settings.HotkeyEnabled);
         Assert.Equal("Ctrl+Shift+F9", recovered.Settings.Hotkey);
+        Assert.True(recovered.Settings.WebDavAutoSyncEnabled);
+        Assert.Equal("https://dav.example.test/widgets/", recovered.Settings.WebDavUrl);
+        Assert.Equal("alice", recovered.Settings.WebDavUsername);
+        Assert.Equal("encrypted", recovered.Settings.WebDavProtectedPassword);
+        Assert.Equal("timeout", recovered.Settings.WebDavLastError);
     }
 
     [Theory]

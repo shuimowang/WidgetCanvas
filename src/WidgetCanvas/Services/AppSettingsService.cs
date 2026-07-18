@@ -18,6 +18,20 @@ namespace WidgetCanvas.Services
         public string Hotkey { get; set; } = "Ctrl+Alt+W";
 
         public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+
+        public bool WebDavAutoSyncEnabled { get; set; }
+
+        public string WebDavUrl { get; set; } = string.Empty;
+
+        public string WebDavUsername { get; set; } = string.Empty;
+
+        public string WebDavProtectedPassword { get; set; } = string.Empty;
+
+        public string WebDavDeviceId { get; set; } = Guid.NewGuid().ToString("N");
+
+        public DateTimeOffset? LastWebDavSyncUtc { get; set; }
+
+        public string WebDavLastError { get; set; } = string.Empty;
     }
 
     internal sealed class AppSettingsService
@@ -80,6 +94,13 @@ namespace WidgetCanvas.Services
                     settings.Hotkey = string.IsNullOrWhiteSpace(settings.Hotkey)
                         ? "Ctrl+Alt+W"
                         : settings.Hotkey.Trim();
+                    settings.WebDavUrl = settings.WebDavUrl?.Trim() ?? string.Empty;
+                    settings.WebDavUsername = settings.WebDavUsername?.Trim() ?? string.Empty;
+                    settings.WebDavProtectedPassword ??= string.Empty;
+                    settings.WebDavLastError ??= string.Empty;
+                    settings.WebDavDeviceId = string.IsNullOrWhiteSpace(settings.WebDavDeviceId)
+                        ? Guid.NewGuid().ToString("N")
+                        : settings.WebDavDeviceId.Trim();
                     return settings;
                 }
                 catch (JsonException)

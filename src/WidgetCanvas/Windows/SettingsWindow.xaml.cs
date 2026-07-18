@@ -42,6 +42,23 @@ namespace WidgetCanvas.Windows
             StartupToggle.IsChecked = StartupService.IsEnabled();
             HotkeyToggle.IsChecked = _app.Settings.HotkeyEnabled;
             HotkeyTextBox.Text = _app.Settings.Hotkey;
+            WebDavAutoSyncToggle.IsChecked = _app.Settings.WebDavAutoSyncEnabled;
+            WebDavUrlTextBox.Text = _app.Settings.WebDavUrl;
+            WebDavUsernameTextBox.Text = _app.Settings.WebDavUsername;
+            try
+            {
+                WebDavPasswordBox.Password = _app.GetWebDavPassword();
+                WebDavStatusText.Text = !string.IsNullOrWhiteSpace(_app.Settings.WebDavLastError)
+                    ? "上次同步失败：" + _app.Settings.WebDavLastError
+                    : _app.Settings.LastWebDavSyncUtc is DateTimeOffset syncedAt
+                        ? "上次同步：" + syncedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                        : "尚未同步";
+            }
+            catch (InvalidOperationException ex)
+            {
+                WebDavPasswordBox.Clear();
+                WebDavStatusText.Text = ex.Message;
+            }
             UpdateStatusText.Text = _app.Settings.LastUpdateCheckUtc is DateTimeOffset checkedAt
                 ? "上次检查：" + checkedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                 : "尚未检查更新";
@@ -148,6 +165,76 @@ namespace WidgetCanvas.Windows
             {
                 CheckUpdateButton.IsEnabled = true;
             }
+        }
+
+        private async void TestWebDavButton_Click(object sender, RoutedEventArgs e)
+        {
+            SetWebDavButtonsEnabled(false);
+            WebDavStatusText.Text = "正在测试 WebDAV…";
+            try
+            {
+                await _app.TestWebDavAsync(
+                    WebDavUrlTextBox.Text,
+                    WebDavUsernameTextBox.Text,
+                    WebDavPasswordBox.Password);
+                WebDavStatusText.Text = "连接成功 · 目录可访问";
+            }
+            catch (Exception ex)
+            {
+                WebDavStatusText.Text = "连接失败";
+                ShowError(ex.Message);
+            }
+            finally
+            {
+                SetWebDavButtonsEnabled(true);
+            }
+        }
+
+        private void SaveWebDavButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                SaveCurrentWebDavSettings();
+                WebDavStatusText.Text = "WebDAV 设置已保存";
+            }
+            catch (Exception ex)
+            {
+                ShowError(ex.Message);
+            }
+        }
+
+        private async void SyncWebDavButton_Click(object sender, RoutedEventArgs e)
+        {
+            SetWebDavButtonsEnabled(false);
+            try
+            {
+                SaveCurrentWebDavSettings();
+                WebDavStatusText.Text = "正在同步组件…";
+                WebDavSyncResult result = await _app.SynchronizeWebDavAsync();
+                WebDavStatusText.Text = result.Message + $" · {result.WidgetCount} 个组件";
+            }
+            catch (Exception ex)
+            {
+                WebDavStatusText.Text = "同步失败";
+                ShowError(ex.Message);
+            }
+            finally
+            {
+                SetWebDavButtonsEnabled(true);
+            }
+        }
+
+        private void SaveCurrentWebDavSettings() => _app.SaveWebDavSettings(
+            WebDavAutoSyncToggle.IsChecked == true,
+            WebDavUrlTextBox.Text,
+            WebDavUsernameTextBox.Text,
+            WebDavPasswordBox.Password);
+
+        private void SetWebDavButtonsEnabled(bool enabled)
+        {
+            TestWebDavButton.IsEnabled = enabled;
+            SaveWebDavButton.IsEnabled = enabled;
+            SyncWebDavButton.IsEnabled = enabled;
         }
 
         private void ProjectButton_Click(object sender, RoutedEventArgs e) => OpenUrl(UpdateService.ProjectUrl);

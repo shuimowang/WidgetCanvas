@@ -2,7 +2,7 @@
   <img src="assets/widgetcanvas.png" width="112" alt="WidgetCanvas 图标">
   <h1>WidgetCanvas · 浮岛</h1>
   <p>把任意 AI 生成的 HTML 变成真正可用的 Windows 桌面小组件。</p>
-  <p><a href="README.md">English</a> · <a href="docs/host-api.md">宿主接口</a> · <a href="docs/external-integration.zh-CN.md">外部集成</a> · <a href="CONTRIBUTING.md">参与贡献</a></p>
+  <p><a href="README.md">English</a> · <a href="docs/host-api.md">宿主接口</a> · <a href="docs/webdav-sync.zh-CN.md">WebDAV 同步</a> · <a href="docs/external-integration.zh-CN.md">外部集成</a> · <a href="CONTRIBUTING.md">参与贡献</a></p>
 </div>
 
 ![WidgetCanvas 浮岛](docs/images/hero.png)
@@ -16,7 +16,7 @@ WidgetCanvas 是一个面向 AI 创作的 Windows 桌面小组件画布。你只
 - **真正的桌面能力：**支持状态、剪贴板、HTTP、只读文件、用户目录和参数化进程调用。
 - **放置自由：**拖动、缩放、锁定、搜索、收进组件库，也能弹成独立窗口。
 - **适合长期运行：**隐藏浮岛不会销毁仍在使用的组件。
-- **本地优先：**组件源码和状态都保存在本机。
+- **本地优先：**默认完全保存在本机，也可选择通过自己的 WebDAV 多设备同步。
 
 ## 快速开始
 
@@ -36,7 +36,7 @@ WidgetCanvas 是一个面向 AI 创作的 Windows 桌面小组件画布。你只
 - 点击右上角 `×`：真正退出并释放 WebView2。
 - 双击托盘图标或再次运行 EXE：重新显示浮岛。
 - 右键托盘图标：进入画布或组件库，也可直接把任意组件显示为独立窗口。
-- 从托盘打开“管理中心”：配置自动更新、开机启动和显示画布的全局快捷键。
+- 从托盘打开“管理中心”：配置自动更新、WebDAV 同步、开机启动和显示画布的全局快捷键。
 - 组件右键：编辑、重新加载、锁定、弹出、收进组件库、复制或永久删除。
 - 按住 `Ctrl` 拖动组件手柄：弹出为独立组件窗口。
 - `WidgetCanvas.exe --widget "组件标题"`：按 HTML `<title>` 直接打开某个组件。
@@ -54,6 +54,10 @@ WidgetCanvas.exe --settings
 
 组件目录变动后，应用会原子更新 `%LocalAppData%\浮岛\Integration\widgets.json`，再触发 `Local\WidgetCanvas.ComponentsChanged`。JSON 结构和推荐的 Quicker 右键菜单流程见[外部集成文档](docs/external-integration.zh-CN.md)。
 
+## WebDAV 多设备同步
+
+管理中心可以连接用户自己的 WebDAV 目录，同步组件 HTML 以及便签、待办等 `host.state` 数据。同步不会上传画布布局、独立窗口位置、WebView2 缓存或应用设置；从其他设备收到的新组件先进入组件库。应用采用三方合并和 ETag 条件写入，同时修改时会保留冲突副本，不会静默覆盖。参见 [WebDAV 同步文档](docs/webdav-sync.zh-CN.md)。
+
 ## 数据目录
 
 用户创建的组件源码放在便于查看和备份的位置：
@@ -62,11 +66,12 @@ WidgetCanvas.exe --settings
 Documents\浮岛\组件\widgets.json
 ```
 
-布局、组件状态、缓存和日志放在本机运行数据目录，不参与文档同步：
+布局、组件状态、缓存和日志放在本机运行数据目录，不参与 Documents 文档同步。启用 WebDAV 时只从运行状态中提取组件自己的 `host.state` 数据：
 
 ```text
 %LocalAppData%\浮岛\State\canvas.json
 %LocalAppData%\浮岛\Integration\widgets.json
+%LocalAppData%\浮岛\Sync\webdav-base.json
 %LocalAppData%\浮岛\WebView2\
 %LocalAppData%\浮岛\Logs\
 ```

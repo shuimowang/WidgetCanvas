@@ -27,6 +27,10 @@ namespace WidgetCanvas
         private AppSettingsService? _settingsService;
         private GlobalHotkeyService? _hotkeyService;
         private UpdateService? _updateService;
+        private WebDavSyncService? _webDavSyncService;
+        private DispatcherTimer? _webDavPeriodicTimer;
+        private DispatcherTimer? _webDavChangeTimer;
+        private bool _webDavSyncInProgress;
 
         internal AppSettings Settings =>
             _settingsService?.Settings ?? throw new InvalidOperationException("设置服务尚未初始化。");
@@ -62,6 +66,7 @@ namespace WidgetCanvas
             DispatcherUnhandledException += OnDispatcherUnhandledException;
             _settingsService = new AppSettingsService(AppPaths.SettingsFilePath);
             _updateService = new UpdateService();
+            _webDavSyncService = new WebDavSyncService();
             _hotkeyService = new GlobalHotkeyService(ShowCanvas);
             if (Settings.StartWithWindows)
             {
@@ -98,8 +103,10 @@ namespace WidgetCanvas
                     HtmlWidgetCanvasWindow.DisposeWindow();
                     Shutdown();
                 });
+            InitializeWebDavSync();
             HandleLaunchArguments(e.Args);
             _ = CheckForUpdatesOnStartupAsync();
+            _ = SynchronizeWebDavOnStartupAsync();
         }
 
         protected override void OnExit(ExitEventArgs e)
@@ -108,6 +115,13 @@ namespace WidgetCanvas
             _trayIcon = null;
             _hotkeyService?.Dispose();
             _hotkeyService = null;
+            HtmlWidgetCanvasWindow.WidgetDataSaved -= OnWidgetDataSaved;
+            _webDavPeriodicTimer?.Stop();
+            _webDavPeriodicTimer = null;
+            _webDavChangeTimer?.Stop();
+            _webDavChangeTimer = null;
+            _webDavSyncService?.Dispose();
+            _webDavSyncService = null;
             _updateService = null;
             _settingsService = null;
             _commandCancellation?.Cancel();
@@ -183,6 +197,90 @@ namespace WidgetCanvas
             (_hotkeyService ?? throw new InvalidOperationException("快捷键服务尚未初始化。"))
                 .Apply(Settings.HotkeyEnabled, Settings.Hotkey);
 
+        internal string GetWebDavPassword() =>
+            SecretProtector.Unprotect(Settings.WebDavProtectedPassword);
+
+        internal void SaveWebDavSettings(
+            bool autoSyncEnabled,
+            string url,
+            string username,
+            string password)
+        {
+            string normalizedUrl = url?.Trim() ?? string.Empty;
+            string normalizedUsername = username?.Trim() ?? string.Empty;
+            if (autoSyncEnabled || !string.IsNullOrWhiteSpace(normalizedUrl))
+                _ = WebDavSyncService.CreateOptions(normalizedUrl, normalizedUsername, password);
+
+            bool endpointChanged = !string.Equals(
+                                       Settings.WebDavUrl,
+                                       normalizedUrl,
+                                       StringComparison.OrdinalIgnoreCase) ||
+                                   !string.Equals(
+                                       Settings.WebDavUsername,
+                                       normalizedUsername,
+                                       StringComparison.Ordinal);
+            Settings.WebDavAutoSyncEnabled = autoSyncEnabled;
+            Settings.WebDavUrl = normalizedUrl;
+            Settings.WebDavUsername = normalizedUsername;
+            Settings.WebDavProtectedPassword = SecretProtector.Protect(password);
+            if (endpointChanged)
+            {
+                Settings.LastWebDavSyncUtc = null;
+                Settings.WebDavLastError = string.Empty;
+                TryDeleteFile(AppPaths.WebDavSyncBaseFilePath);
+            }
+            SaveSettings();
+            ApplyWebDavTimerState();
+        }
+
+        internal async Task TestWebDavAsync(
+            string url,
+            string username,
+            string password)
+        {
+            WebDavSyncService service = _webDavSyncService
+                ?? throw new InvalidOperationException("WebDAV 同步服务尚未初始化。");
+            WebDavConnectionOptions options = WebDavSyncService.CreateOptions(url, username, password);
+            await service.TestConnectionAsync(options);
+        }
+
+        internal async Task<WebDavSyncResult> SynchronizeWebDavAsync()
+        {
+            if (_webDavSyncInProgress)
+                throw new InvalidOperationException("WebDAV 正在同步，请稍候。");
+            WebDavSyncService service = _webDavSyncService
+                ?? throw new InvalidOperationException("WebDAV 同步服务尚未初始化。");
+            WebDavConnectionOptions options = WebDavSyncService.CreateOptions(
+                Settings.WebDavUrl,
+                Settings.WebDavUsername,
+                GetWebDavPassword());
+            string? blockReason = HtmlWidgetCanvasWindow.GetSynchronizationBlockReason();
+            if (!string.IsNullOrWhiteSpace(blockReason))
+                throw new InvalidOperationException(blockReason);
+            _webDavSyncInProgress = true;
+            try
+            {
+                if (!HtmlWidgetCanvasWindow.FlushDataForSync())
+                    throw new IOException("组件数据尚未成功保存，本次同步已取消。");
+                WebDavSyncResult result = await service.SynchronizeAsync(
+                    options,
+                    Settings.WebDavDeviceId,
+                    AppPaths.WidgetCatalogFilePath,
+                    AppPaths.CanvasStateFilePath,
+                    AppPaths.WebDavSyncBaseFilePath);
+                if (result.LocalDataChanged)
+                    HtmlWidgetCanvasWindow.ReloadDataAfterSync();
+                Settings.LastWebDavSyncUtc = DateTimeOffset.UtcNow;
+                Settings.WebDavLastError = string.Empty;
+                SaveSettings();
+                return result;
+            }
+            finally
+            {
+                _webDavSyncInProgress = false;
+            }
+        }
+
         internal async Task<string> CheckForUpdatesAsync(Window? owner)
         {
             UpdateService updater = _updateService
@@ -228,6 +326,113 @@ namespace WidgetCanvas
             catch (Exception ex)
             {
                 WriteDiagnosticLog("update-check", ex);
+            }
+        }
+
+        private void InitializeWebDavSync()
+        {
+            HtmlWidgetCanvasWindow.WidgetDataSaved += OnWidgetDataSaved;
+            _webDavChangeTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(15)
+            };
+            _webDavChangeTimer.Tick += WebDavChangeTimer_Tick;
+            _webDavPeriodicTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(5)
+            };
+            _webDavPeriodicTimer.Tick += WebDavPeriodicTimer_Tick;
+            ApplyWebDavTimerState();
+        }
+
+        private void ApplyWebDavTimerState()
+        {
+            if (_webDavPeriodicTimer == null)
+                return;
+            if (Settings.WebDavAutoSyncEnabled && !string.IsNullOrWhiteSpace(Settings.WebDavUrl))
+                _webDavPeriodicTimer.Start();
+            else
+            {
+                _webDavPeriodicTimer.Stop();
+                _webDavChangeTimer?.Stop();
+            }
+        }
+
+        private void OnWidgetDataSaved()
+        {
+            if (_webDavSyncInProgress ||
+                !Settings.WebDavAutoSyncEnabled ||
+                string.IsNullOrWhiteSpace(Settings.WebDavUrl) ||
+                _webDavChangeTimer == null)
+            {
+                return;
+            }
+            _webDavChangeTimer.Stop();
+            _webDavChangeTimer.Start();
+        }
+
+        private async void WebDavChangeTimer_Tick(object? sender, EventArgs e)
+        {
+            _webDavChangeTimer?.Stop();
+            await TryAutomaticWebDavSyncAsync("webdav-change");
+        }
+
+        private async void WebDavPeriodicTimer_Tick(object? sender, EventArgs e) =>
+            await TryAutomaticWebDavSyncAsync("webdav-periodic");
+
+        private async Task SynchronizeWebDavOnStartupAsync()
+        {
+            if (!Settings.WebDavAutoSyncEnabled || string.IsNullOrWhiteSpace(Settings.WebDavUrl))
+                return;
+            await Task.Delay(TimeSpan.FromSeconds(3));
+            if (_settingsService == null)
+                return;
+            await TryAutomaticWebDavSyncAsync("webdav-startup");
+        }
+
+        private async Task TryAutomaticWebDavSyncAsync(string logCategory)
+        {
+            if (_settingsService == null)
+                return;
+            try
+            {
+                if (_webDavSyncInProgress ||
+                    !Settings.WebDavAutoSyncEnabled ||
+                    string.IsNullOrWhiteSpace(Settings.WebDavUrl) ||
+                    HtmlWidgetCanvasWindow.GetSynchronizationBlockReason() != null)
+                {
+                    return;
+                }
+                await SynchronizeWebDavAsync();
+            }
+            catch (Exception ex)
+            {
+                if (_settingsService != null)
+                {
+                    Settings.WebDavLastError = ex.Message;
+                    try
+                    {
+                        SaveSettings();
+                    }
+                    catch (Exception settingsException)
+                    {
+                        WriteDiagnosticLog("webdav-settings", settingsException);
+                    }
+                }
+                WriteDiagnosticLog(logCategory, ex);
+            }
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                WriteDiagnosticLog("webdav-base-reset", ex);
             }
         }
 

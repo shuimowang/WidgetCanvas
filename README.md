@@ -2,7 +2,7 @@
   <img src="assets/widgetcanvas.png" width="112" alt="WidgetCanvas logo">
   <h1>WidgetCanvas</h1>
   <p>Turn AI-generated HTML into live Windows desktop widgets.</p>
-  <p><a href="README.zh-CN.md">简体中文</a> · <a href="docs/host-api.md">Host API</a> · <a href="docs/external-integration.md">External integration</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
+  <p><a href="README.zh-CN.md">简体中文</a> · <a href="docs/host-api.md">Host API</a> · <a href="docs/webdav-sync.md">WebDAV sync</a> · <a href="docs/external-integration.md">External integration</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
 </div>
 
 ![WidgetCanvas canvas](docs/images/hero.png)
@@ -16,7 +16,7 @@ WidgetCanvas is an AI-first desktop widget canvas for Windows. Describe a widget
 - **Desktop capabilities:** state, clipboard, HTTP, read-only files, known folders, and parameterized process execution.
 - **Flexible placement:** drag, resize, lock, archive, search, or detach a widget into its own window.
 - **Designed for long-running widgets:** hiding the canvas keeps active widgets running.
-- **Local by default:** widget source and runtime state stay on your computer.
+- **Local by default:** data stays on your computer unless you opt into sync through your own WebDAV service.
 
 ## Quick start
 
@@ -36,7 +36,7 @@ Windows 10/11 x64 is supported. WidgetCanvas is self-contained and does not requ
 - Use the top-right `×` to actually exit and release WebView2 resources.
 - Double-click the tray icon or run `WidgetCanvas.exe` again to reopen the canvas.
 - Right-click the tray icon to open the canvas or component library, or launch any widget directly in its own window.
-- Open **Management Center** from the tray to configure automatic updates, start with Windows, and a global canvas hotkey.
+- Open **Management Center** from the tray to configure automatic updates, WebDAV sync, start with Windows, and a global canvas hotkey.
 - Right-click a widget to edit, reload, lock, detach, archive, duplicate, or delete it.
 - Hold `Ctrl` while dragging a widget handle to detach it into a standalone window.
 - Use `WidgetCanvas.exe --widget "Widget title"` to open one widget directly by its HTML `<title>`.
@@ -54,6 +54,10 @@ WidgetCanvas.exe --settings
 
 Catalog changes atomically update `%LocalAppData%\浮岛\Integration\widgets.json` and signal `Local\WidgetCanvas.ComponentsChanged`. See [External integration](docs/external-integration.md) for the JSON schema and recommended Quicker menu flow.
 
+## WebDAV sync
+
+Management Center can connect to your own WebDAV directory and synchronize widget HTML plus widget-owned `host.state` data such as notes and tasks. Canvas layout, detached-window position, WebView2 cache, and application settings stay on each device. New widgets received from another device enter the library. Three-way merging and conditional ETag writes preserve concurrent edits as conflict copies instead of silently overwriting them. See [WebDAV sync](docs/webdav-sync.md).
+
 ## Data locations
 
 User-authored widget source is easy to back up:
@@ -62,11 +66,12 @@ User-authored widget source is easy to back up:
 Documents\浮岛\组件\widgets.json
 ```
 
-Machine-local state is kept out of Documents and cloud sync:
+Machine-local state is kept out of Documents sync. When WebDAV is enabled, only widget-owned `host.state` values are extracted from runtime state:
 
 ```text
 %LocalAppData%\浮岛\State\canvas.json
 %LocalAppData%\浮岛\Integration\widgets.json
+%LocalAppData%\浮岛\Sync\webdav-base.json
 %LocalAppData%\浮岛\WebView2\
 %LocalAppData%\浮岛\Logs\
 ```

@@ -37,6 +37,10 @@ namespace WidgetCanvas
 
         public static string WidgetIndexFilePath { get; } = Path.Combine(IntegrationFolder, "widgets.json");
 
+        public static string SyncFolder { get; } = Path.Combine(LocalDataFolder, "Sync");
+
+        public static string WebDavSyncBaseFilePath { get; } = Path.Combine(SyncFolder, "webdav-base.json");
+
         public static string LogsFolder { get; } = Path.Combine(LocalDataFolder, "Logs");
 
         public static void EnsureCreated()
@@ -47,6 +51,7 @@ namespace WidgetCanvas
             Directory.CreateDirectory(SettingsFolder);
             Directory.CreateDirectory(UpdatesFolder);
             Directory.CreateDirectory(IntegrationFolder);
+            Directory.CreateDirectory(SyncFolder);
             Directory.CreateDirectory(LogsFolder);
         }
     }

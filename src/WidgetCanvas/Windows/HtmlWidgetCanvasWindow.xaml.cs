@@ -47,6 +47,7 @@ namespace WidgetCanvas.Windows
         private const uint KeyEventUpFlag = 0x0002;
         private static HtmlWidgetCanvasWindow? _instance;
         private static Task<CoreWebView2Environment>? _environmentTask;
+        internal static event Action? WidgetDataSaved;
         private static readonly HttpClient SharedHttpClient = new(new SocketsHttpHandler
         {
             AutomaticDecompression = DecompressionMethods.All,
@@ -106,6 +107,7 @@ namespace WidgetCanvas.Windows
         private int _libraryPreviewGeneration;
         private string? _lastSaveError;
         private bool _isClosed;
+        private bool _reloadingSynchronizedData;
         private WindowDockEngine? _detachedDockEngine;
 
         /// <summary>
@@ -383,6 +385,49 @@ namespace WidgetCanvas.Windows
         }
 
         /// <summary>
+        /// WebDAV 同步前立即把内存中的组件状态写入本地文件。
+        /// 不创建尚未使用的浮岛宿主。
+        /// </summary>
+        internal static bool FlushDataForSync()
+        {
+            HtmlWidgetCanvasWindow? window = _instance;
+            if (window == null)
+                return true;
+            return InvokeOnUiThread(window.SaveNow);
+        }
+
+        internal static string? GetSynchronizationBlockReason()
+        {
+            HtmlWidgetCanvasWindow? window = _instance;
+            if (window == null)
+                return null;
+            return InvokeOnUiThread(() =>
+            {
+                if (window.WidgetEditorLayer.Visibility == Visibility.Visible)
+                    return "请先保存或取消当前组件编辑，再进行 WebDAV 同步。";
+                if (window._isAdjustingWidget || window._visibilityChangePending)
+                    return "组件窗口正在调整，请稍后再同步。";
+                return null;
+            });
+        }
+
+        /// <summary>
+        /// WebDAV 下载或合并数据后，从文件重新建立运行时。远端新组件默认位于
+        /// 组件库；所有本机布局由同步合并器提前保留。
+        /// </summary>
+        internal static void ReloadDataAfterSync()
+        {
+            HtmlWidgetCanvasWindow? window = _instance;
+            if (window == null)
+                return;
+            InvokeOnUiThread(() =>
+            {
+                window.ReloadDataFromDisk();
+                return true;
+            });
+        }
+
+        /// <summary>
         /// 以代码方式添加一个 HTML 组件，并返回最终的唯一 title。
         /// 若传入 title 已存在，宿主会自动追加序号。
         /// </summary>
@@ -437,7 +482,8 @@ namespace WidgetCanvas.Windows
             string? initialPosition,
             bool hideCanvasAfterOpen,
             bool applyOwner = false,
-            HtmlWidgetReturnTarget? returnTarget = null)
+            HtmlWidgetReturnTarget? returnTarget = null,
+            bool startHidden = false)
         {
             Dispatcher.VerifyAccess();
             // 隐藏的主浮岛同时承担独立窗口的数据与桥接宿主，不能继续从属于
@@ -482,7 +528,10 @@ namespace WidgetCanvas.Windows
             {
                 CancelWidgetComposition();
             }
-            window.ShowAndActivate(activate);
+            if (startHidden)
+                window.ShowRestoredAfterSync(wasVisible: false, activate: false);
+            else
+                window.ShowAndActivate(activate);
             if (hideCanvasAfterOpen && IsVisible)
                 HideWindow();
             if (canvasRuntime != null)
@@ -3989,7 +4038,7 @@ namespace WidgetCanvas.Windows
 
         private void MarkDirty()
         {
-            if (_isClosed || _disposeRequested || Dispatcher.HasShutdownStarted)
+            if (_isClosed || _disposeRequested || _reloadingSynchronizedData || Dispatcher.HasShutdownStarted)
                 return;
             _saveDirty = true;
             _saveTimer.Stop();
@@ -4009,6 +4058,7 @@ namespace WidgetCanvas.Windows
                 HtmlWidgetCanvasStore.Save(DataFilePath, RuntimeDataFilePath, _widgets);
                 _saveDirty = false;
                 PublishWidgetCatalog();
+                NotifyWidgetDataSaved();
                 _saveTimer.Interval = TimeSpan.FromMilliseconds(SaveDelayMilliseconds);
                 _lastSaveError = null;
                 return true;
@@ -4063,6 +4113,100 @@ namespace WidgetCanvas.Windows
             catch (Exception ex)
             {
                 Debug.WriteLine("HtmlWidgetCanvasWindow 发布组件索引失败：" + ex.Message);
+            }
+        }
+
+        private static void NotifyWidgetDataSaved()
+        {
+            Delegate[] handlers = WidgetDataSaved?.GetInvocationList() ?? [];
+            foreach (Delegate handler in handlers)
+            {
+                try
+                {
+                    ((Action)handler)();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("HtmlWidgetCanvasWindow 数据保存通知失败：" + ex.Message);
+                }
+            }
+        }
+
+        private void ReloadDataFromDisk()
+        {
+            Dispatcher.VerifyAccess();
+            if (_isClosed || _disposeRequested)
+                return;
+
+            _reloadingSynchronizedData = true;
+            try
+            {
+                _saveTimer.Stop();
+                _saveDirty = false;
+                _returnToLibraryAfterEditor = false;
+                _returnToDetachedAfterEditor = false;
+                _detachedEditorOwner = null;
+                _editingWidget = null;
+                WidgetEditorLayer.Visibility = Visibility.Collapsed;
+                HtmlEditor.Clear();
+                ResetLibraryPreview();
+
+                DetachedSyncSnapshot[] detachedSnapshots = _detachedWindows
+                    .Select(item => new DetachedSyncSnapshot(
+                        item.Key.Id,
+                        item.Value.ReturnTarget,
+                        item.Value.IsVisible,
+                        item.Value.IsActive,
+                        item.Value.Owner))
+                    .ToArray();
+                foreach (HtmlWidgetWindow detached in _detachedWindows.Values.ToList())
+                    detached.CloseForHost();
+                _detachedWindows.Clear();
+                foreach (HtmlWidgetDefinition widget in _widgets.ToList())
+                    RemoveWidgetFrame(widget);
+
+                HtmlWidgetCanvasLoadResult loaded = HtmlWidgetCanvasStore.Load(
+                    DataFilePath,
+                    RuntimeDataFilePath);
+                _widgets.Clear();
+                _widgets.AddRange(loaded.Widgets);
+                if (_isLoadedOnce)
+                {
+                    foreach (HtmlWidgetDefinition widget in _widgets.Where(item => item.Home == HtmlWidgetHome.Canvas))
+                        AddWidgetFrame(widget);
+                    ClampAllWidgetsToCanvas();
+                }
+
+                foreach (DetachedSyncSnapshot snapshot in detachedSnapshots)
+                {
+                    HtmlWidgetDefinition? widget = _widgets.FirstOrDefault(item =>
+                        string.Equals(item.Id, snapshot.WidgetId, StringComparison.Ordinal));
+                    if (widget == null)
+                        continue;
+                    Window? owner = snapshot.Owner is { IsLoaded: true } ? snapshot.Owner : null;
+                    ShowDetachedWidget(
+                        widget,
+                        owner,
+                        snapshot.WasActive,
+                        initialPosition: widget.DetachedPosition,
+                        hideCanvasAfterOpen: false,
+                        applyOwner: true,
+                        returnTarget: snapshot.ReturnTarget,
+                        startHidden: !snapshot.WasVisible);
+                }
+
+                UpdateEmptyState();
+                RefreshWidgetLibrary();
+                PublishWidgetCatalog();
+                SetWebViewsVisible(WidgetEditorLayer.Visibility != Visibility.Visible &&
+                                   WidgetLibraryLayer.Visibility != Visibility.Visible);
+                ApplyOverlayWindowVisibility();
+                if (IsVisible)
+                    ShowToast("WebDAV 同步已更新组件");
+            }
+            finally
+            {
+                _reloadingSynchronizedData = false;
             }
         }
 
@@ -4173,6 +4317,13 @@ namespace WidgetCanvas.Windows
             public string? LastHostError { get; set; }
             public bool HasFatalError { get; set; }
         }
+
+        private sealed record DetachedSyncSnapshot(
+            string WidgetId,
+            HtmlWidgetReturnTarget ReturnTarget,
+            bool WasVisible,
+            bool WasActive,
+            Window? Owner);
 
         private sealed class LibraryPreviewRuntime(
             HtmlWidgetDefinition definition,
