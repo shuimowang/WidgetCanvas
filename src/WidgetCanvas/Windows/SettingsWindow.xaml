@@ -146,7 +146,9 @@
                                 <Button Content="项目主页" Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
                                         Click="ProjectButton_Click" />
                                 <Button Content="版本发布" Style="{StaticResource ButtonStyle}"
-                                        Click="ReleasesButton_Click" />
+                                        Margin="0,0,8,0" Click="ReleasesButton_Click" />
+                                <Button Content="反馈问题" Style="{StaticResource ButtonStyle}"
+                                        Click="FeedbackButton_Click" />
                             </StackPanel>
                         </Grid>
                     </Border>

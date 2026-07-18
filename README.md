@@ -2,7 +2,7 @@
   <img src="assets/widgetcanvas.png" width="112" alt="WidgetCanvas logo">
   <h1>WidgetCanvas</h1>
   <p>Turn AI-generated HTML into live Windows desktop widgets.</p>
-  <p><a href="README.zh-CN.md">简体中文</a> · <a href="docs/host-api.md">Host API</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
+  <p><a href="README.zh-CN.md">简体中文</a> · <a href="docs/host-api.md">Host API</a> · <a href="docs/external-integration.md">External integration</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
 </div>
 
 ![WidgetCanvas canvas](docs/images/hero.png)
@@ -42,6 +42,18 @@ Windows 10/11 x64 is supported. WidgetCanvas is self-contained and does not requ
 - Use `WidgetCanvas.exe --widget "Widget title"` to open one widget directly by its HTML `<title>`.
 - Use `WidgetCanvas.exe --settings` to open Management Center, or `--background` to start in tray-only mode.
 
+## External automation
+
+Quicker actions and scripts can query the current titles without starting the UI:
+
+```powershell
+WidgetCanvas.exe --list-widgets --output "%TEMP%\WidgetCanvas-widgets.json"
+WidgetCanvas.exe --widget "Widget title"
+WidgetCanvas.exe --settings
+```
+
+Catalog changes atomically update `%LocalAppData%\浮岛\Integration\widgets.json` and signal `Local\WidgetCanvas.ComponentsChanged`. See [External integration](docs/external-integration.md) for the JSON schema and recommended Quicker menu flow.
+
 ## Data locations
 
 User-authored widget source is easy to back up:
@@ -54,6 +66,7 @@ Machine-local state is kept out of Documents and cloud sync:
 
 ```text
 %LocalAppData%\浮岛\State\canvas.json
+%LocalAppData%\浮岛\Integration\widgets.json
 %LocalAppData%\浮岛\WebView2\
 %LocalAppData%\浮岛\Logs\
 ```

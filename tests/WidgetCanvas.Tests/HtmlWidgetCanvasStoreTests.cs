@@ -24,6 +24,8 @@ public sealed class HtmlWidgetCanvasStoreTests : IDisposable
             Y = 24,
             Width = 360,
             Height = 220,
+            DetachedWidth = 480,
+            DetachedHeight = 300,
             DetachedTopmost = false,
             DetachedAutoHide = true,
             State = new Dictionary<string, JsonElement>
@@ -41,8 +43,10 @@ public sealed class HtmlWidgetCanvasStoreTests : IDisposable
             widget.Html,
             contentDocument.RootElement.GetProperty("Widgets")[0].GetProperty("Html").GetString());
         Assert.DoesNotContain("DetachedTopmost", contentJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("DetachedWidth", contentJson, StringComparison.Ordinal);
         Assert.DoesNotContain("State", contentJson, StringComparison.Ordinal);
         Assert.Contains("DetachedTopmost", runtimeJson, StringComparison.Ordinal);
+        Assert.Contains("DetachedWidth", runtimeJson, StringComparison.Ordinal);
         Assert.Contains("hello", runtimeJson, StringComparison.Ordinal);
 
         HtmlWidgetCanvasLoadResult result = HtmlWidgetCanvasStore.Load(contentPath, runtimePath);
@@ -50,6 +54,10 @@ public sealed class HtmlWidgetCanvasStoreTests : IDisposable
         Assert.Equal(widget.Id, loaded.Id);
         Assert.Equal(widget.Html, loaded.Html);
         Assert.Equal(42, loaded.X);
+        Assert.Equal(360, loaded.Width);
+        Assert.Equal(220, loaded.Height);
+        Assert.Equal(480, loaded.DetachedWidth);
+        Assert.Equal(300, loaded.DetachedHeight);
         Assert.False(loaded.DetachedTopmost);
         Assert.True(loaded.DetachedAutoHide);
         Assert.Equal("hello", loaded.State["note"].GetProperty("text").GetString());

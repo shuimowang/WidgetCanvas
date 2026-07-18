@@ -48,6 +48,14 @@ namespace WidgetCanvas.HtmlWidgets
         public string DetachedPosition { get; set; } = string.Empty;
 
         /// <summary>
+        /// 独立窗口自己的内容区大小。与画布中的 Width/Height 分开保存，
+        /// 避免外部窗口移动或缩放改变组件回到画布后的布局。
+        /// </summary>
+        public double DetachedWidth { get; set; }
+
+        public double DetachedHeight { get; set; }
+
+        /// <summary>
         /// 独立组件窗口是否使用 WPF 置顶。不会执行原生 Z-order 调整。
         /// </summary>
         public bool DetachedTopmost { get; set; } = true;

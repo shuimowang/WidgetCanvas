@@ -3,6 +3,7 @@
 using WidgetCanvas.HtmlWidgets;
 using WidgetCanvas.Infrastructure.Docking;
 using WidgetCanvas.Infrastructure.Win32;
+using WidgetCanvas.Services;
 using Microsoft.Web.WebView2.Core;
 using WebView2Control = Microsoft.Web.WebView2.Wpf.WebView2;
 using System;
@@ -63,6 +64,7 @@ namespace WidgetCanvas.Windows
         private readonly DispatcherTimer _toastTimer;
         private readonly DispatcherTimer _overlayProbeTimer;
         private readonly DispatcherTimer _librarySearchTimer;
+        private readonly WidgetCatalogIntegration _catalogIntegration;
         private readonly string? _loadNotice;
         private readonly bool _recoveredFromBackup;
         private static string _dataFilePath = HtmlWidgetCanvasStore.DefaultFilePath;
@@ -178,6 +180,7 @@ namespace WidgetCanvas.Windows
             _widgets = loadResult.Widgets;
             _loadNotice = loadResult.Notice;
             _recoveredFromBackup = loadResult.RecoveredFromBackup;
+            _catalogIntegration = new WidgetCatalogIntegration(AppPaths.WidgetIndexFilePath);
 
             _saveTimer = new DispatcherTimer
             {
@@ -216,6 +219,7 @@ namespace WidgetCanvas.Windows
 
             if (NormalizeLoadedWidgetTitles())
                 MarkDirty();
+            PublishWidgetCatalog();
 
             Loaded += Window_Loaded;
             SourceInitialized += (_, _) => ApplyWindowLocation();
@@ -778,6 +782,7 @@ namespace WidgetCanvas.Windows
             _composingWebViews.Clear();
             _detachedDockEngine?.Dispose();
             _detachedDockEngine = null;
+            _catalogIntegration.Dispose();
             _instance = null;
         }
 
@@ -1515,7 +1520,10 @@ namespace WidgetCanvas.Windows
                 EndWidgetAdjustment();
                 if (detach)
                 {
+                    // 鼠标释放点只决定独立窗口的初始位置。组件在画布里的
+                    // 原始 X/Y 必须保留，收回时不能因为“拖出”动作压到其他组件。
                     string initialPosition = CreateDetachedPosition(runtime.Definition);
+                    MoveWidget(runtime, _dragStartX, _dragStartY);
                     ShowDetachedWidget(
                         runtime.Definition,
                         owner: null,
@@ -4000,6 +4008,7 @@ namespace WidgetCanvas.Windows
             {
                 HtmlWidgetCanvasStore.Save(DataFilePath, RuntimeDataFilePath, _widgets);
                 _saveDirty = false;
+                PublishWidgetCatalog();
                 _saveTimer.Interval = TimeSpan.FromMilliseconds(SaveDelayMilliseconds);
                 _lastSaveError = null;
                 return true;
@@ -4041,10 +4050,20 @@ namespace WidgetCanvas.Windows
             _toastTimer.Start();
         }
 
-        private static string GetDisplayName(HtmlWidgetDefinition widget)
+        private static string GetDisplayName(HtmlWidgetDefinition widget) =>
+            HtmlWidgetTitle.GetDisplayName(widget);
+
+        private void PublishWidgetCatalog()
         {
-            string title = GetHtmlTitle(widget.Html);
-            return string.IsNullOrWhiteSpace(title) ? "未命名组件" : title;
+            try
+            {
+                _catalogIntegration.PublishIfChanged(_widgets.Select(widget =>
+                    new WidgetCatalogEntry(widget.Id, GetDisplayName(widget), widget.Home)));
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("HtmlWidgetCanvasWindow 发布组件索引失败：" + ex.Message);
+            }
         }
 
         private static string ExtractHtml(string text)
@@ -4080,36 +4099,10 @@ namespace WidgetCanvas.Windows
             return end > start ? value[start..end].Trim() : value[start..].Trim();
         }
 
-        private static string GetHtmlTitle(string html)
-        {
-            int titleStart = html.IndexOf("<title", StringComparison.OrdinalIgnoreCase);
-            if (titleStart < 0)
-                return string.Empty;
-            titleStart = html.IndexOf('>', titleStart);
-            if (titleStart < 0)
-                return string.Empty;
-            int titleEnd = html.IndexOf("</title>", titleStart + 1, StringComparison.OrdinalIgnoreCase);
-            if (titleEnd <= titleStart)
-                return string.Empty;
-            string title = WebUtility.HtmlDecode(html[(titleStart + 1)..titleEnd]).Trim();
-            return title;
-        }
+        private static string GetHtmlTitle(string html) => HtmlWidgetTitle.GetHtmlTitle(html);
 
-        private static string SetHtmlTitle(string html, string title)
-        {
-            int titleStart = html.IndexOf("<title", StringComparison.OrdinalIgnoreCase);
-            if (titleStart < 0)
-                return html;
-            titleStart = html.IndexOf('>', titleStart);
-            if (titleStart < 0)
-                return html;
-            int titleEnd = html.IndexOf("</title>", titleStart + 1, StringComparison.OrdinalIgnoreCase);
-            if (titleEnd <= titleStart)
-                return html;
-            return html[..(titleStart + 1)] +
-                   WebUtility.HtmlEncode(title) +
-                   html[titleEnd..];
-        }
+        private static string SetHtmlTitle(string html, string title) =>
+            HtmlWidgetTitle.SetHtmlTitle(html, title);
 
         private string EnsureUniqueWidgetTitle(
             string html,

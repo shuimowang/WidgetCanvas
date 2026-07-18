@@ -1,5 +1,8 @@
 using System.Windows.Input;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
+using WidgetCanvas.HtmlWidgets;
 using WidgetCanvas.Services;
 
 namespace WidgetCanvas.Tests;
@@ -87,6 +90,46 @@ public sealed class AppServicesTests : IDisposable
 
         Assert.Equal("new-version", File.ReadAllText(target));
         Assert.False(File.Exists(target + ".new"));
+    }
+
+    [Fact]
+    public void WidgetCatalogPublishesSnapshotAndSignalsOnlyOnMeaningfulChanges()
+    {
+        string snapshotPath = Path.Combine(_directory, "integration", "widgets.json");
+        string eventName = @"Local\WidgetCanvas.Tests." + Guid.NewGuid().ToString("N");
+        using var integration = new WidgetCatalogIntegration(snapshotPath, eventName);
+        using EventWaitHandle changed = EventWaitHandle.OpenExisting(eventName);
+        WidgetCatalogEntry[] initial =
+        [
+            new("b", "天气", HtmlWidgetHome.Library),
+            new("a", "便签", HtmlWidgetHome.Canvas)
+        ];
+
+        Assert.True(integration.PublishIfChanged(initial));
+        Assert.True(changed.WaitOne(0));
+        var snapshotOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        snapshotOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        WidgetCatalogSnapshot first = JsonSerializer.Deserialize<WidgetCatalogSnapshot>(
+            File.ReadAllText(snapshotPath),
+            snapshotOptions)!;
+        Assert.Equal(1, first.Revision);
+        Assert.Equal(["便签", "天气"], first.Titles);
+
+        Assert.False(integration.PublishIfChanged(initial.Reverse()));
+        Assert.False(changed.WaitOne(0));
+
+        WidgetCatalogEntry[] renamed =
+        [
+            initial[0],
+            initial[1] with { Title = "护眼便签" }
+        ];
+        Assert.True(integration.PublishIfChanged(renamed));
+        Assert.True(changed.WaitOne(0));
+        WidgetCatalogSnapshot second = JsonSerializer.Deserialize<WidgetCatalogSnapshot>(
+            File.ReadAllText(snapshotPath),
+            snapshotOptions)!;
+        Assert.Equal(2, second.Revision);
+        Assert.Contains("护眼便签", second.Titles);
     }
 
     public void Dispose()

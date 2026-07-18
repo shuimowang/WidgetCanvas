@@ -27,6 +27,7 @@ namespace WidgetCanvas.Services
     {
         public const string ProjectUrl = "https://github.com/shuimowang/WidgetCanvas";
         public const string ReleasesUrl = ProjectUrl + "/releases";
+        public const string FeedbackUrl = ProjectUrl + "/issues/new";
         private const string LatestReleaseApi = "https://api.github.com/repos/shuimowang/WidgetCanvas/releases/latest";
         private const string ExecutableAssetName = "WidgetCanvas-win-x64.exe";
         private const string ChecksumAssetName = ExecutableAssetName + ".sha256";

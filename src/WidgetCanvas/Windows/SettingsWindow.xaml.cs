@@ -154,6 +154,8 @@ namespace WidgetCanvas.Windows
 
         private void ReleasesButton_Click(object sender, RoutedEventArgs e) => OpenUrl(UpdateService.ReleasesUrl);
 
+        private void FeedbackButton_Click(object sender, RoutedEventArgs e) => OpenUrl(UpdateService.FeedbackUrl);
+
         private void ComponentsButton_Click(object sender, RoutedEventArgs e) => OpenFolder(AppPaths.ComponentsFolder);
 
         private void LogsButton_Click(object sender, RoutedEventArgs e) => OpenFolder(AppPaths.LogsFolder);

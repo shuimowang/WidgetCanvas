@@ -33,6 +33,10 @@ namespace WidgetCanvas
 
         public static string UpdatesFolder { get; } = Path.Combine(LocalDataFolder, "Updates");
 
+        public static string IntegrationFolder { get; } = Path.Combine(LocalDataFolder, "Integration");
+
+        public static string WidgetIndexFilePath { get; } = Path.Combine(IntegrationFolder, "widgets.json");
+
         public static string LogsFolder { get; } = Path.Combine(LocalDataFolder, "Logs");
 
         public static void EnsureCreated()
@@ -42,6 +46,7 @@ namespace WidgetCanvas
             Directory.CreateDirectory(StateFolder);
             Directory.CreateDirectory(SettingsFolder);
             Directory.CreateDirectory(UpdatesFolder);
+            Directory.CreateDirectory(IntegrationFolder);
             Directory.CreateDirectory(LogsFolder);
         }
     }

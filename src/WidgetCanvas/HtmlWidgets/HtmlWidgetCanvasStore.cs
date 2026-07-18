@@ -134,6 +134,8 @@ namespace WidgetCanvas.HtmlWidgets
                 widget.Id = Guid.NewGuid().ToString("N");
             widget.Html ??= string.Empty;
             widget.DetachedPosition = widget.DetachedPosition?.Trim() ?? string.Empty;
+            widget.DetachedWidth = NormalizeOptionalSize(widget.DetachedWidth, 140);
+            widget.DetachedHeight = NormalizeOptionalSize(widget.DetachedHeight, 90);
             if (!Enum.IsDefined(widget.Home))
                 widget.Home = HtmlWidgetHome.Canvas;
             var state = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
@@ -253,6 +255,8 @@ namespace WidgetCanvas.HtmlWidgets
             widget.IsLocked = state.IsLocked;
             widget.Home = state.Home;
             widget.DetachedPosition = state.DetachedPosition ?? string.Empty;
+            widget.DetachedWidth = state.DetachedWidth;
+            widget.DetachedHeight = state.DetachedHeight;
             widget.DetachedTopmost = state.DetachedTopmost;
             widget.DetachedAutoHide = state.DetachedAutoHide;
             widget.State = state.State ?? new Dictionary<string, JsonElement>(StringComparer.Ordinal);
@@ -268,6 +272,8 @@ namespace WidgetCanvas.HtmlWidgets
             IsLocked = widget.IsLocked,
             Home = widget.Home,
             DetachedPosition = widget.DetachedPosition,
+            DetachedWidth = widget.DetachedWidth,
+            DetachedHeight = widget.DetachedHeight,
             DetachedTopmost = widget.DetachedTopmost,
             DetachedAutoHide = widget.DetachedAutoHide,
             State = widget.State.ToDictionary(
@@ -280,6 +286,9 @@ namespace WidgetCanvas.HtmlWidgets
 
         private static double NormalizeSize(double value, double minimum, double fallback) =>
             double.IsFinite(value) ? Math.Max(minimum, value) : fallback;
+
+        private static double NormalizeOptionalSize(double value, double minimum) =>
+            double.IsFinite(value) && value > 0 ? Math.Max(minimum, value) : 0;
 
         private static double NormalizeCoordinate(double value) =>
             double.IsFinite(value) ? Math.Max(0, value) : 0;
@@ -326,6 +335,10 @@ namespace WidgetCanvas.HtmlWidgets
             public HtmlWidgetHome Home { get; set; } = HtmlWidgetHome.Canvas;
 
             public string DetachedPosition { get; set; } = string.Empty;
+
+            public double DetachedWidth { get; set; }
+
+            public double DetachedHeight { get; set; }
 
             public bool DetachedTopmost { get; set; } = true;
 

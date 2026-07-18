@@ -70,8 +70,13 @@ namespace WidgetCanvas.Windows
             InitializeComponent();
             Title = ComponentName;
             TitleText.Text = ComponentName;
-            Width = Math.Max(MinWidth, definition.Width);
-            Height = Math.Max(MinHeight, definition.Height + WindowChromeHeight);
+            Width = Math.Max(
+                MinWidth,
+                definition.DetachedWidth > 0 ? definition.DetachedWidth : definition.Width);
+            Height = Math.Max(
+                MinHeight,
+                (definition.DetachedHeight > 0 ? definition.DetachedHeight : definition.Height) +
+                WindowChromeHeight);
             Topmost = definition.DetachedTopmost;
             OriginButton.ToolTip = OriginToolTip;
             Browser.DefaultBackgroundColor = System.Drawing.Color.Transparent;
@@ -391,8 +396,8 @@ namespace WidgetCanvas.Windows
 
             if (WidgetContentHost.ActualWidth >= 1 && WidgetContentHost.ActualHeight >= 1)
             {
-                _definition.Width = Math.Max(140, WidgetContentHost.ActualWidth);
-                _definition.Height = Math.Max(90, WidgetContentHost.ActualHeight);
+                _definition.DetachedWidth = Math.Max(140, WidgetContentHost.ActualWidth);
+                _definition.DetachedHeight = Math.Max(90, WidgetContentHost.ActualHeight);
             }
             if (_host.CanSaveDetachedPosition(this))
                 _definition.DetachedPosition = HtmlWidgetCanvasWindow.GetPhysicalWindowPosition(this);

@@ -33,6 +33,14 @@ namespace WidgetCanvas
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            if (WidgetIntegrationCommand.IsRequest(e.Args))
+            {
+                base.OnStartup(e);
+                Environment.ExitCode = WidgetIntegrationCommand.Execute(e.Args);
+                Shutdown(Environment.ExitCode);
+                return;
+            }
+
             if (UpdateInstaller.IsApplyRequest(e.Args))
             {
                 base.OnStartup(e);

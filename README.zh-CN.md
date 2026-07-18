@@ -2,7 +2,7 @@
   <img src="assets/widgetcanvas.png" width="112" alt="WidgetCanvas 图标">
   <h1>WidgetCanvas · 浮岛</h1>
   <p>把任意 AI 生成的 HTML 变成真正可用的 Windows 桌面小组件。</p>
-  <p><a href="README.md">English</a> · <a href="docs/host-api.md">宿主接口</a> · <a href="CONTRIBUTING.md">参与贡献</a></p>
+  <p><a href="README.md">English</a> · <a href="docs/host-api.md">宿主接口</a> · <a href="docs/external-integration.zh-CN.md">外部集成</a> · <a href="CONTRIBUTING.md">参与贡献</a></p>
 </div>
 
 ![WidgetCanvas 浮岛](docs/images/hero.png)
@@ -42,6 +42,18 @@ WidgetCanvas 是一个面向 AI 创作的 Windows 桌面小组件画布。你只
 - `WidgetCanvas.exe --widget "组件标题"`：按 HTML `<title>` 直接打开某个组件。
 - `WidgetCanvas.exe --settings`：直接打开管理中心；`--background`：只在托盘驻留。
 
+## 外部自动化
+
+Quicker 动作或脚本无需启动界面即可读取当前组件标题：
+
+```powershell
+WidgetCanvas.exe --list-widgets --output "%TEMP%\WidgetCanvas-widgets.json"
+WidgetCanvas.exe --widget "组件标题"
+WidgetCanvas.exe --settings
+```
+
+组件目录变动后，应用会原子更新 `%LocalAppData%\浮岛\Integration\widgets.json`，再触发 `Local\WidgetCanvas.ComponentsChanged`。JSON 结构和推荐的 Quicker 右键菜单流程见[外部集成文档](docs/external-integration.zh-CN.md)。
+
 ## 数据目录
 
 用户创建的组件源码放在便于查看和备份的位置：
@@ -54,6 +66,7 @@ Documents\浮岛\组件\widgets.json
 
 ```text
 %LocalAppData%\浮岛\State\canvas.json
+%LocalAppData%\浮岛\Integration\widgets.json
 %LocalAppData%\浮岛\WebView2\
 %LocalAppData%\浮岛\Logs\
 ```
