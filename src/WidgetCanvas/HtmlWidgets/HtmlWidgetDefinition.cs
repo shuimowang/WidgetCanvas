@@ -13,6 +13,11 @@ namespace WidgetCanvas.HtmlWidgets
     }
 
     /// <summary>
+    /// 系统托盘显示组件时使用的只读快照，避免托盘直接接触组件运行时对象。
+    /// </summary>
+    internal sealed record HtmlWidgetTrayEntry(string Name, HtmlWidgetHome Home);
+
+    /// <summary>
     /// 描述浮岛画布中的一个 HTML 组件。
     /// </summary>
     internal sealed class HtmlWidgetDefinition

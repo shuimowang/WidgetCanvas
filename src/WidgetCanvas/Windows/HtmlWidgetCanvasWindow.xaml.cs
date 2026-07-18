@@ -256,6 +256,35 @@ namespace WidgetCanvas.Windows
         }
 
         /// <summary>
+        /// 显示进程内唯一的浮岛窗口，并直接进入组件库。
+        /// </summary>
+        public static HtmlWidgetCanvasWindow ShowLibraryWindow(bool activate = true)
+        {
+            return InvokeOnUiThread(() =>
+            {
+                HtmlWidgetCanvasWindow window = ShowWindow(activate: activate);
+                window.ShowWidgetLibrary();
+                return window;
+            });
+        }
+
+        /// <summary>
+        /// 返回供系统托盘使用的组件标题与归属快照。
+        /// 每次打开托盘菜单都会重新读取，因此无需维护另一份菜单状态。
+        /// </summary>
+        internal static IReadOnlyList<HtmlWidgetTrayEntry> GetTrayEntries()
+        {
+            return InvokeOnUiThread(() =>
+            {
+                HtmlWidgetCanvasWindow host = _instance ??= new HtmlWidgetCanvasWindow();
+                return host._widgets
+                    .Select(widget => new HtmlWidgetTrayEntry(GetDisplayName(widget), widget.Home))
+                    .OrderBy(entry => entry.Name, StringComparer.CurrentCultureIgnoreCase)
+                    .ToArray();
+            });
+        }
+
+        /// <summary>
         /// 按组件 HTML 的 <c>title</c> 打开独立组件窗口，而不显示主浮岛。
         /// </summary>
         /// <exception cref="KeyNotFoundException">找不到指定名称的组件。</exception>

@@ -42,6 +42,9 @@ namespace WidgetCanvas
             _commandListener = ListenForCommandsAsync(_commandCancellation.Token);
             _trayIcon = new TrayIconService(
                 ShowCanvas,
+                () => HtmlWidgetCanvasWindow.ShowLibraryWindow(activate: true),
+                componentName => HtmlWidgetCanvasWindow.ShowWidgetWindow(componentName, activate: true),
+                HtmlWidgetCanvasWindow.GetTrayEntries,
                 () =>
                 {
                     HtmlWidgetCanvasWindow.DisposeWindow();

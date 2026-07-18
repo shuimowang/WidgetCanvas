@@ -35,6 +35,7 @@ Windows 10/11 x64 is supported. WidgetCanvas is self-contained and does not requ
 - Click outside all widgets or press `Esc` to hide the canvas without stopping widgets.
 - Use the top-right `×` to actually exit and release WebView2 resources.
 - Double-click the tray icon or run `WidgetCanvas.exe` again to reopen the canvas.
+- Right-click the tray icon to open the canvas or component library, or launch any widget directly in its own window.
 - Right-click a widget to edit, reload, lock, detach, archive, duplicate, or delete it.
 - Hold `Ctrl` while dragging a widget handle to detach it into a standalone window.
 - Use `WidgetCanvas.exe --widget "Widget title"` to open one widget directly by its HTML `<title>`.
