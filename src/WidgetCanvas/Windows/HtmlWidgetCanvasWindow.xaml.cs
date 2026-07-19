@@ -60,6 +60,8 @@ namespace WidgetCanvas.Windows
         private readonly List<HtmlWidgetDefinition> _widgets;
         private readonly Dictionary<HtmlWidgetDefinition, WidgetRuntime> _runtimes = [];
         private readonly Dictionary<HtmlWidgetDefinition, HtmlWidgetWindow> _detachedWindows = [];
+        private readonly Dictionary<string, HtmlWidgetDefinition> _fileWidgets =
+            new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<WebView2Control> _composingWebViews = [];
         private readonly DispatcherTimer _saveTimer;
         private readonly DispatcherTimer _toastTimer;
@@ -315,6 +317,51 @@ namespace WidgetCanvas.Windows
             return ShowWidgetWindowCore(componentName, owner, activate);
         }
 
+        /// <summary>
+        /// 读取外部文件中的完整单文件 HTML，并显示为独立组件窗口。
+        /// 文件组件不会加入浮岛或组件库；布局和实例状态按绝对路径单独保存。
+        /// </summary>
+        public static HtmlWidgetWindow ShowFileWidgetWindow(
+            string filePath,
+            bool activate = true)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+            string fullPath = Path.GetFullPath(filePath.Trim());
+            string html = ReadFileWidgetHtml(fullPath);
+            return InvokeOnUiThread(() =>
+            {
+                HtmlWidgetCanvasWindow host = _instance ??= new HtmlWidgetCanvasWindow();
+                if (host._fileWidgets.TryGetValue(fullPath, out HtmlWidgetDefinition? existingDefinition) &&
+                    host._detachedWindows.TryGetValue(existingDefinition, out HtmlWidgetWindow? existingWindow))
+                {
+                    existingWindow.ReplaceFileHtml(html);
+                    existingWindow.ShowAndActivate(activate);
+                    if (host.IsVisible)
+                        HideWindow();
+                    return existingWindow;
+                }
+
+                var widget = HtmlFileWidgetStateStore.Load(fullPath, html);
+                host._fileWidgets[fullPath] = widget;
+                try
+                {
+                    return host.ShowDetachedWidget(
+                        widget,
+                        owner: null,
+                        activate,
+                        initialPosition: null,
+                        hideCanvasAfterOpen: true,
+                        applyOwner: false,
+                        returnTarget: HtmlWidgetReturnTarget.Close);
+                }
+                catch
+                {
+                    host._fileWidgets.Remove(fullPath);
+                    throw;
+                }
+            });
+        }
+
         private static HtmlWidgetWindow ShowWidgetWindowCore(
             string componentName,
             Window? owner,
@@ -506,10 +553,14 @@ namespace WidgetCanvas.Windows
                     ? HtmlWidgetReturnTarget.Canvas
                     : HtmlWidgetReturnTarget.Library);
             _runtimes.TryGetValue(widget, out WidgetRuntime? canvasRuntime);
-            widget.Home = origin == HtmlWidgetReturnTarget.Canvas
-                ? HtmlWidgetHome.Canvas
-                : HtmlWidgetHome.Library;
-            UpdateEmptyState();
+            bool closesWithoutReturn = origin == HtmlWidgetReturnTarget.Close;
+            if (!closesWithoutReturn)
+            {
+                widget.Home = origin == HtmlWidgetReturnTarget.Canvas
+                    ? HtmlWidgetHome.Canvas
+                    : HtmlWidgetHome.Library;
+                UpdateEmptyState();
+            }
 
             var window = new HtmlWidgetWindow(
                 this,
@@ -519,9 +570,12 @@ namespace WidgetCanvas.Windows
                 returnTarget: origin);
             window.ApplyOwner(owner);
             _detachedWindows.Add(widget, window);
-            MarkDirty();
-            SaveNow();
-            RefreshWidgetLibrary();
+            if (!closesWithoutReturn)
+            {
+                MarkDirty();
+                SaveNow();
+                RefreshWidgetLibrary();
+            }
             if (canvasRuntime != null &&
                 _composingWebViews.Contains(canvasRuntime.WebView) &&
                 IsActive)
@@ -661,6 +715,20 @@ namespace WidgetCanvas.Windows
         {
             if (_detachedWindows.TryGetValue(widget, out HtmlWidgetWindow? current) && current == window)
                 _detachedWindows.Remove(widget);
+
+            if (widget.IsFileBacked)
+            {
+                try
+                {
+                    HtmlFileWidgetStateStore.Save(widget);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Debug.WriteLine("文件组件状态保存失败：" + ex.Message);
+                }
+                _fileWidgets.Remove(widget.SourceFilePath);
+                return;
+            }
 
             if (action == HtmlWidgetWindow.DetachedCloseAction.Host || _disposeRequested)
                 return;
@@ -4056,6 +4124,8 @@ namespace WidgetCanvas.Windows
             try
             {
                 HtmlWidgetCanvasStore.Save(DataFilePath, RuntimeDataFilePath, _widgets);
+                foreach (HtmlWidgetDefinition fileWidget in _fileWidgets.Values)
+                    HtmlFileWidgetStateStore.Save(fileWidget);
                 _saveDirty = false;
                 PublishWidgetCatalog();
                 NotifyWidgetDataSaved();
@@ -4154,6 +4224,7 @@ namespace WidgetCanvas.Windows
                 DetachedSyncSnapshot[] detachedSnapshots = _detachedWindows
                     .Select(item => new DetachedSyncSnapshot(
                         item.Key.Id,
+                        item.Key.IsFileBacked ? item.Key.SourceFilePath : null,
                         item.Value.ReturnTarget,
                         item.Value.IsVisible,
                         item.Value.IsActive,
@@ -4179,6 +4250,33 @@ namespace WidgetCanvas.Windows
 
                 foreach (DetachedSyncSnapshot snapshot in detachedSnapshots)
                 {
+                    if (!string.IsNullOrWhiteSpace(snapshot.SourceFilePath))
+                    {
+                        try
+                        {
+                            string fileHtml = ReadFileWidgetHtml(snapshot.SourceFilePath);
+                            HtmlWidgetDefinition fileWidget = HtmlFileWidgetStateStore.Load(
+                                snapshot.SourceFilePath,
+                                fileHtml);
+                            _fileWidgets[fileWidget.SourceFilePath] = fileWidget;
+                            Window? fileOwner = snapshot.Owner is { IsLoaded: true } ? snapshot.Owner : null;
+                            ShowDetachedWidget(
+                                fileWidget,
+                                fileOwner,
+                                snapshot.WasActive,
+                                initialPosition: fileWidget.DetachedPosition,
+                                hideCanvasAfterOpen: false,
+                                applyOwner: true,
+                                returnTarget: HtmlWidgetReturnTarget.Close,
+                                startHidden: !snapshot.WasVisible);
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            Debug.WriteLine("WebDAV 同步后恢复文件组件失败：" + ex.Message);
+                        }
+                        continue;
+                    }
+
                     HtmlWidgetDefinition? widget = _widgets.FirstOrDefault(item =>
                         string.Equals(item.Id, snapshot.WidgetId, StringComparison.Ordinal));
                     if (widget == null)
@@ -4241,6 +4339,48 @@ namespace WidgetCanvas.Windows
                 start++;
             int end = value.IndexOf("```", start, StringComparison.Ordinal);
             return end > start ? value[start..end].Trim() : value[start..].Trim();
+        }
+
+        internal static string ReadFileWidgetHtml(string filePath)
+        {
+            string fullPath = Path.GetFullPath(filePath);
+            if (!File.Exists(fullPath))
+                throw new FileNotFoundException("找不到组件 HTML 文件。", fullPath);
+
+            var info = new FileInfo(fullPath);
+            if (info.Length > MaximumWidgetHtmlBytes * 4L)
+                throw new InvalidDataException("组件文件过大，HTML 的 UTF-8 大小不能超过 2 MB。");
+
+            string text;
+            using (var stream = new FileStream(
+                fullPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete))
+            using (var reader = new StreamReader(
+                stream,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true),
+                detectEncodingFromByteOrderMarks: true))
+            {
+                try
+                {
+                    text = reader.ReadToEnd();
+                }
+                catch (DecoderFallbackException ex)
+                {
+                    throw new InvalidDataException("组件文件必须使用 UTF-8，或带 BOM 的 UTF-16/UTF-32 编码。", ex);
+                }
+            }
+
+            string html = ExtractHtml(text);
+            if (!IsValidHtmlDocument(html))
+            {
+                throw new InvalidDataException(
+                    "文件必须包含 doctype、html、title、style 和 body 的完整单文件 HTML。");
+            }
+            if (Encoding.UTF8.GetByteCount(html) > MaximumWidgetHtmlBytes)
+                throw new InvalidDataException("组件 HTML 的 UTF-8 大小不能超过 2 MB。");
+            return html;
         }
 
         private static string GetHtmlTitle(string html) => HtmlWidgetTitle.GetHtmlTitle(html);
@@ -4320,6 +4460,7 @@ namespace WidgetCanvas.Windows
 
         private sealed record DetachedSyncSnapshot(
             string WidgetId,
+            string? SourceFilePath,
             HtmlWidgetReturnTarget ReturnTarget,
             bool WasVisible,
             bool WasActive,

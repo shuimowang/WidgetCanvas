@@ -69,5 +69,15 @@ namespace WidgetCanvas.HtmlWidgets
         /// 由组件内 <c>window.widgetHost.state</c> API 保存的实例级状态。
         /// </summary>
         public Dictionary<string, JsonElement> State { get; set; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// 仅运行时使用：该组件是否直接来自外部 HTML 文件，而不是画布目录。
+        /// </summary>
+        public bool IsFileBacked { get; set; }
+
+        /// <summary>
+        /// 仅运行时使用：文件组件对应的规范化绝对路径。
+        /// </summary>
+        public string SourceFilePath { get; set; } = string.Empty;
     }
 }

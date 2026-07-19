@@ -19,6 +19,9 @@ WidgetCanvas.exe --list-widgets --output "%TEMP%\WidgetCanvas-widgets.json"
 # Show or focus one standalone widget; title matching is case-insensitive
 WidgetCanvas.exe --widget "便签"
 
+# Load an HTML file in a standalone widget window without importing it
+WidgetCanvas.exe --file "D:\Widgets\clock.html"
+
 # Open Management Center
 WidgetCanvas.exe --settings
 
@@ -30,6 +33,8 @@ WidgetCanvas.exe --exit
 ```
 
 `--list-widgets` reads the persisted catalog directly and exits, so it works whether the main application is running or not. It returns exit code `0` on success and `2` on failure. Component titles are unique; a missing or ambiguous `--widget` title is reported instead of opening the wrong component.
+
+`--file` also accepts `--widget-file` and `-f`. The file must be a complete single-file HTML document encoded as UTF-8, or BOM-marked UTF-16/UTF-32, with a maximum UTF-8 size of 2 MiB. It is not added to the component catalog. Calling the same path again rereads the file and focuses the existing window. Window layout, topmost, edge auto-hide, and `host.state` are stored by normalized absolute path under `%LocalAppData%\浮岛\State\FileWidgets`. Closing the window never deletes the source file.
 
 ## Component index JSON
 

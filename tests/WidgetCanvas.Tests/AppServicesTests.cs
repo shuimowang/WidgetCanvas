@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using WidgetCanvas.HtmlWidgets;
 using WidgetCanvas.Services;
+using WidgetCanvas.Windows;
 
 namespace WidgetCanvas.Tests;
 
@@ -98,6 +99,56 @@ public sealed class AppServicesTests : IDisposable
     {
         Assert.True(App.IsExitRequest([argument]));
         Assert.False(App.IsExitRequest(["--background"]));
+    }
+
+    [Fact]
+    public void FileWidgetArgumentIsNormalizedBeforeForwarding()
+    {
+        string relativePath = Path.Combine("widgets", "clock.html");
+
+        string[] normalized = App.NormalizeFileArgument(["--FILE", relativePath]);
+
+        Assert.Equal("--FILE", normalized[0]);
+        Assert.Equal(Path.GetFullPath(relativePath), normalized[1]);
+    }
+
+    [Fact]
+    public void FileWidgetReaderAcceptsCompleteHtmlAndRejectsIncompleteContent()
+    {
+        Directory.CreateDirectory(_directory);
+        string validPath = Path.Combine(_directory, "clock.html");
+        string invalidPath = Path.Combine(_directory, "broken.html");
+        const string html = "<!doctype html><html><head><title>时钟</title><style>body{margin:0}</style></head><body>12:00</body></html>";
+        File.WriteAllText(validPath, html);
+        File.WriteAllText(invalidPath, "<html><body>missing title and style</body></html>");
+
+        Assert.Equal(html, HtmlWidgetCanvasWindow.ReadFileWidgetHtml(validPath));
+        Assert.Throws<InvalidDataException>(() => HtmlWidgetCanvasWindow.ReadFileWidgetHtml(invalidPath));
+    }
+
+    [Fact]
+    public void FileWidgetStatePersistsBySourcePathWithoutCopyingHtml()
+    {
+        string sourcePath = Path.Combine(_directory, "clock.html");
+        string stateFolder = Path.Combine(_directory, "file-state");
+        const string firstHtml = "<!doctype html><html><head><title>初版</title><style></style></head><body></body></html>";
+        const string updatedHtml = "<!doctype html><html><head><title>新版</title><style></style></head><body></body></html>";
+        HtmlWidgetDefinition widget = HtmlFileWidgetStateStore.Load(sourcePath, firstHtml, stateFolder);
+        widget.DetachedPosition = "10,20,360,280";
+        widget.DetachedWidth = 360;
+        widget.DetachedHeight = 243;
+        using JsonDocument value = JsonDocument.Parse("{\"theme\":\"dark\"}");
+        widget.State["settings"] = value.RootElement.Clone();
+        HtmlFileWidgetStateStore.Save(widget, stateFolder);
+
+        HtmlWidgetDefinition restored = HtmlFileWidgetStateStore.Load(sourcePath, updatedHtml, stateFolder);
+
+        Assert.Equal(updatedHtml, restored.Html);
+        Assert.Equal("10,20,360,280", restored.DetachedPosition);
+        Assert.Equal(360, restored.DetachedWidth);
+        Assert.Equal("dark", restored.State["settings"].GetProperty("theme").GetString());
+        Assert.True(restored.IsFileBacked);
+        Assert.Equal(Path.GetFullPath(sourcePath), restored.SourceFilePath);
     }
 
     [Fact]

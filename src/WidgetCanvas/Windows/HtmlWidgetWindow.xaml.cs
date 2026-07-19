@@ -7,6 +7,7 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
@@ -23,7 +24,9 @@ namespace WidgetCanvas.Windows
     public enum HtmlWidgetReturnTarget
     {
         Canvas,
-        Library
+        Library,
+        /// <summary>关闭窗口，不把临时文件组件加入浮岛或组件库。</summary>
+        Close
     }
 
     /// <summary>
@@ -80,6 +83,8 @@ namespace WidgetCanvas.Windows
                 WindowChromeHeight);
             Topmost = definition.DetachedTopmost;
             OriginButton.ToolTip = OriginToolTip;
+            if (_definition.IsFileBacked)
+                EditButton.Content = "打开文件";
             Browser.DefaultBackgroundColor = System.Drawing.Color.Transparent;
             Browser.AllowExternalDrop = false;
 
@@ -175,6 +180,32 @@ namespace WidgetCanvas.Windows
         /// 使用当前已保存的 HTML 重新加载组件。
         /// </summary>
         public void Reload()
+        {
+            if (_definition.IsFileBacked)
+            {
+                try
+                {
+                    ReplaceFileHtml(HtmlWidgetCanvasWindow.ReadFileWidgetHtml(_definition.SourceFilePath));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    ShowFatalError("重新读取文件失败：" + ex.Message);
+                }
+                return;
+            }
+
+            ReloadCurrentHtml();
+        }
+
+        internal void ReplaceFileHtml(string html)
+        {
+            if (!_definition.IsFileBacked)
+                throw new InvalidOperationException("当前窗口不是文件组件。");
+            _definition.Html = html;
+            ReloadCurrentHtml();
+        }
+
+        private void ReloadCurrentHtml()
         {
             Title = ComponentName;
             TitleText.Text = ComponentName;
@@ -479,9 +510,17 @@ namespace WidgetCanvas.Windows
         {
             var menu = new ContextMenu();
             HtmlWidgetMenuTheme.Apply(menu);
-            menu.Items.Add(CreateMenuItem("编辑组件…", () => RequestClose(DetachedCloseAction.Edit)));
-            menu.Items.Add(CreateMenuItem("复制 AI 修改提示词", CopyEditPrompt));
-            menu.Items.Add(CreateMenuItem("重新加载", Reload));
+            if (_definition.IsFileBacked)
+            {
+                menu.Items.Add(CreateMenuItem("从文件重新加载", Reload));
+                menu.Items.Add(CreateMenuItem("打开源文件", OpenSourceFile));
+            }
+            else
+            {
+                menu.Items.Add(CreateMenuItem("编辑组件…", () => RequestClose(DetachedCloseAction.Edit)));
+                menu.Items.Add(CreateMenuItem("复制 AI 修改提示词", CopyEditPrompt));
+                menu.Items.Add(CreateMenuItem("重新加载", Reload));
+            }
             var diagnostics = new MenuItem { Header = "错误诊断" };
             if (!string.IsNullOrWhiteSpace(_lastRuntimeError))
             {
@@ -539,16 +578,19 @@ namespace WidgetCanvas.Windows
             menu.Items.Add(CreateMenuItem("隐藏窗口", HideWidget));
             menu.Items.Add(new Separator());
             menu.Items.Add(CreateMenuItem(OriginMenuText, ReturnToOrigin));
-            menu.Items.Add(CreateSubmenu(
-                "移动到",
-                CreateMenuItem("浮岛", ReturnToCanvas),
-                CreateMenuItem("组件库", MoveToLibrary)));
-            menu.Items.Add(new Separator());
-            MenuItem deleteItem = CreateMenuItem(
-                "删除组件…",
-                () => _host.DeleteDetachedWidget(_definition, this));
-            deleteItem.Foreground = new SolidColorBrush(Color.FromRgb(255, 157, 165));
-            menu.Items.Add(deleteItem);
+            if (!_definition.IsFileBacked)
+            {
+                menu.Items.Add(CreateSubmenu(
+                    "移动到",
+                    CreateMenuItem("浮岛", ReturnToCanvas),
+                    CreateMenuItem("组件库", MoveToLibrary)));
+                menu.Items.Add(new Separator());
+                MenuItem deleteItem = CreateMenuItem(
+                    "删除组件…",
+                    () => _host.DeleteDetachedWidget(_definition, this));
+                deleteItem.Foreground = new SolidColorBrush(Color.FromRgb(255, 157, 165));
+                menu.Items.Add(deleteItem);
+            }
             menu.IsOpen = true;
         }
 
@@ -582,7 +624,13 @@ namespace WidgetCanvas.Windows
 
         private void CloseButton_Click(object sender, RoutedEventArgs e) => ReturnToOrigin();
 
-        private void EditButton_Click(object sender, RoutedEventArgs e) => EditWidget();
+        private void EditButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_definition.IsFileBacked)
+                OpenSourceFile();
+            else
+                EditWidget();
+        }
 
         private void RetryButton_Click(object sender, RoutedEventArgs e) => Reload();
 
@@ -703,17 +751,38 @@ namespace WidgetCanvas.Windows
         }
 
         private DetachedCloseAction GetOriginCloseAction() =>
-            ReturnTarget == HtmlWidgetReturnTarget.Canvas
-                ? DetachedCloseAction.Canvas
-                : DetachedCloseAction.Library;
+            ReturnTarget switch
+            {
+                HtmlWidgetReturnTarget.Canvas => DetachedCloseAction.Canvas,
+                HtmlWidgetReturnTarget.Library => DetachedCloseAction.Library,
+                _ => DetachedCloseAction.Close
+            };
 
-        private string OriginMenuText => ReturnTarget == HtmlWidgetReturnTarget.Canvas
-            ? "放回浮岛"
-            : "放回组件库";
+        private string OriginMenuText => ReturnTarget switch
+        {
+            HtmlWidgetReturnTarget.Canvas => "放回浮岛",
+            HtmlWidgetReturnTarget.Library => "放回组件库",
+            _ => "关闭窗口"
+        };
 
-        private string OriginToolTip => ReturnTarget == HtmlWidgetReturnTarget.Canvas
-            ? "关闭并放回浮岛"
-            : "关闭并放回组件库";
+        private string OriginToolTip => ReturnTarget switch
+        {
+            HtmlWidgetReturnTarget.Canvas => "关闭并放回浮岛",
+            HtmlWidgetReturnTarget.Library => "关闭并放回组件库",
+            _ => "关闭文件组件"
+        };
+
+        private void OpenSourceFile()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(_definition.SourceFilePath) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                MarkHostError("打开源文件失败：" + ex.Message);
+            }
+        }
 
         internal enum DetachedCloseAction
         {
@@ -721,6 +790,7 @@ namespace WidgetCanvas.Windows
             Canvas,
             Edit,
             Delete,
+            Close,
             Host
         }
     }

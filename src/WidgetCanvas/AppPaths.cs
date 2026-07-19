@@ -27,6 +27,8 @@ namespace WidgetCanvas
 
         public static string CanvasStateFilePath { get; } = Path.Combine(StateFolder, "canvas.json");
 
+        public static string FileWidgetStateFolder { get; } = Path.Combine(StateFolder, "FileWidgets");
+
         public static string SettingsFolder { get; } = Path.Combine(LocalDataFolder, "Settings");
 
         public static string SettingsFilePath { get; } = Path.Combine(SettingsFolder, "settings.json");
@@ -48,6 +50,7 @@ namespace WidgetCanvas
             Directory.CreateDirectory(ComponentsFolder);
             Directory.CreateDirectory(WebView2DataFolder);
             Directory.CreateDirectory(StateFolder);
+            Directory.CreateDirectory(FileWidgetStateFolder);
             Directory.CreateDirectory(SettingsFolder);
             Directory.CreateDirectory(UpdatesFolder);
             Directory.CreateDirectory(IntegrationFolder);

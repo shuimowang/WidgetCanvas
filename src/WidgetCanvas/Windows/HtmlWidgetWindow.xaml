@@ -148,7 +148,7 @@
                                    TextTrimming="CharacterEllipsis" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <Button Content="重试" Padding="11,4" Margin="3,0" Click="RetryButton_Click" />
-                            <Button Content="编辑" Padding="11,4" Margin="3,0" Click="EditButton_Click" />
+                            <Button x:Name="EditButton" Content="编辑" Padding="11,4" Margin="3,0" Click="EditButton_Click" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

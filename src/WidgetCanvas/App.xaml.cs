@@ -56,7 +56,7 @@ namespace WidgetCanvas
             _instanceMutex = new Mutex(initiallyOwned: true, InstanceMutexName, out bool isFirstInstance);
             if (!isFirstInstance)
             {
-                SendArgumentsToRunningInstance(e.Args);
+                SendArgumentsToRunningInstance(NormalizeFileArgument(e.Args));
                 Shutdown();
                 return;
             }
@@ -163,6 +163,33 @@ namespace WidgetCanvas
             if (args.Any(arg => string.Equals(arg, "--settings", StringComparison.OrdinalIgnoreCase)))
             {
                 ShowSettings();
+                return;
+            }
+
+            string? filePath = GetOptionValue(args, "--file", "--widget-file", "-f");
+            if (filePath != null)
+            {
+                if (string.IsNullOrWhiteSpace(filePath))
+                {
+                    MessageBox.Show(
+                        "--file 后必须提供 HTML 文件路径。",
+                        "WidgetCanvas",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
+                try
+                {
+                    HtmlWidgetCanvasWindow.ShowFileWidgetWindow(filePath, activate: true);
+                }
+                catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+                {
+                    MessageBox.Show(
+                        ex.Message,
+                        "WidgetCanvas",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
                 return;
             }
 
@@ -500,6 +527,33 @@ namespace WidgetCanvas
             {
                 WriteDiagnosticLog("ipc-client", ex);
             }
+        }
+
+        internal static string[] NormalizeFileArgument(string[] args)
+        {
+            string[] normalized = (string[])args.Clone();
+            for (int index = 0; index < normalized.Length - 1; index++)
+            {
+                if (!string.Equals(normalized[index], "--file", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(normalized[index], "--widget-file", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(normalized[index], "-f", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                if (!string.IsNullOrWhiteSpace(normalized[index + 1]))
+                {
+                    try
+                    {
+                        normalized[index + 1] = Path.GetFullPath(normalized[index + 1]);
+                    }
+                    catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+                    {
+                        // 交给主实例显示统一的参数错误，不让转发进程静默退出。
+                    }
+                }
+                break;
+            }
+            return normalized;
         }
 
         private static string? GetOptionValue(string[] args, params string[] names)

@@ -1,6 +1,6 @@
 # Widget host API
 
-[English README](../README.md) · [中文说明](../README.zh-CN.md)
+[中文说明](../README.md) · [English README](../README.en.md)
 
 Every widget receives one global object:
 
