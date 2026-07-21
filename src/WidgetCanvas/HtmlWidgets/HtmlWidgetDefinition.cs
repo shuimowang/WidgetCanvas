@@ -12,10 +12,22 @@ namespace WidgetCanvas.HtmlWidgets
         Library
     }
 
+    internal sealed class HtmlWidgetCanvasDefinition
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+        public string Name { get; set; } = "默认画布";
+    }
+
     /// <summary>
     /// 系统托盘显示组件时使用的只读快照，避免托盘直接接触组件运行时对象。
     /// </summary>
-    internal sealed record HtmlWidgetTrayEntry(string Name, HtmlWidgetHome Home);
+    internal sealed record HtmlWidgetTrayEntry(
+        string Name,
+        HtmlWidgetHome Home,
+        string CanvasName = "");
+
+    internal sealed record HtmlWidgetCanvasTrayEntry(string Name, bool IsActive);
 
     /// <summary>
     /// 描述浮岛画布中的一个 HTML 组件。
@@ -35,6 +47,12 @@ namespace WidgetCanvas.HtmlWidgets
         public double Height { get; set; } = 220;
 
         public bool IsLocked { get; set; }
+
+        /// <summary>
+        /// 组件在浮岛中的画布归属。组件库是全局的，此值在组件位于组件库时仍会保留，
+        /// 方便弹出窗口关闭后回到原来的画布。
+        /// </summary>
+        public string CanvasId { get; set; } = HtmlWidgetCanvasStore.DefaultCanvasId;
 
         /// <summary>
         /// 独立窗口关闭后的归处。独立窗口是否正在运行由宿主运行时状态判断。

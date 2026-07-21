@@ -20,12 +20,16 @@ namespace WidgetCanvas
         private readonly Action _showLibrary;
         private readonly Action<string> _showWidget;
         private readonly Func<IReadOnlyList<HtmlWidgetTrayEntry>> _getWidgets;
+        private readonly Action<string> _showNamedCanvas;
+        private readonly Func<IReadOnlyList<HtmlWidgetCanvasTrayEntry>> _getCanvases;
 
         public TrayIconService(
             Action showCanvas,
             Action showLibrary,
             Action<string> showWidget,
             Func<IReadOnlyList<HtmlWidgetTrayEntry>> getWidgets,
+            Action<string> showNamedCanvas,
+            Func<IReadOnlyList<HtmlWidgetCanvasTrayEntry>> getCanvases,
             Action showSettings,
             Action exitApplication)
         {
@@ -33,6 +37,8 @@ namespace WidgetCanvas
             ArgumentNullException.ThrowIfNull(showLibrary);
             ArgumentNullException.ThrowIfNull(showWidget);
             ArgumentNullException.ThrowIfNull(getWidgets);
+            ArgumentNullException.ThrowIfNull(showNamedCanvas);
+            ArgumentNullException.ThrowIfNull(getCanvases);
             ArgumentNullException.ThrowIfNull(showSettings);
             ArgumentNullException.ThrowIfNull(exitApplication);
 
@@ -40,6 +46,8 @@ namespace WidgetCanvas
             _showLibrary = showLibrary;
             _showWidget = showWidget;
             _getWidgets = getWidgets;
+            _showNamedCanvas = showNamedCanvas;
+            _getCanvases = getCanvases;
 
             _menu = new System.Windows.Forms.ContextMenuStrip();
             _canvasMenu = new System.Windows.Forms.ToolStripMenuItem("画布");
@@ -76,12 +84,7 @@ namespace WidgetCanvas
             try
             {
                 IReadOnlyList<HtmlWidgetTrayEntry> entries = _getWidgets();
-                PopulateGroup(
-                    _canvasMenu,
-                    "画布",
-                    "打开画布",
-                    _showCanvas,
-                    entries.Where(entry => entry.Home == HtmlWidgetHome.Canvas));
+                PopulateCanvasGroup(entries.Where(entry => entry.Home == HtmlWidgetHome.Canvas));
                 PopulateGroup(
                     _libraryMenu,
                     "组件库",
@@ -93,6 +96,51 @@ namespace WidgetCanvas
             {
                 PopulateError(_canvasMenu, ex.Message);
                 PopulateError(_libraryMenu, ex.Message);
+            }
+        }
+
+        private void PopulateCanvasGroup(IEnumerable<HtmlWidgetTrayEntry> entries)
+        {
+            ClearDropDown(_canvasMenu);
+            HtmlWidgetTrayEntry[] widgets = entries.ToArray();
+            IReadOnlyList<HtmlWidgetCanvasTrayEntry> canvases = _getCanvases();
+            _canvasMenu.Text = $"画布 ({widgets.Length})";
+            _canvasMenu.DropDownItems.Add("打开当前画布", null, (_, _) => _showCanvas());
+            var switchMenu = new System.Windows.Forms.ToolStripMenuItem("切换画布");
+            foreach (HtmlWidgetCanvasTrayEntry canvas in canvases)
+            {
+                string canvasName = canvas.Name;
+                var item = new System.Windows.Forms.ToolStripMenuItem(FormatMenuText(canvasName))
+                {
+                    Checked = canvas.IsActive,
+                    ToolTipText = canvasName
+                };
+                item.Click += (_, _) => _showNamedCanvas(canvasName);
+                switchMenu.DropDownItems.Add(item);
+            }
+            _canvasMenu.DropDownItems.Add(switchMenu);
+            _canvasMenu.DropDownItems.Add(new System.Windows.Forms.ToolStripSeparator());
+            if (widgets.Length == 0)
+            {
+                _canvasMenu.DropDownItems.Add(new System.Windows.Forms.ToolStripMenuItem("暂无组件")
+                {
+                    Enabled = false
+                });
+                return;
+            }
+            bool showCanvasName = canvases.Count > 1;
+            foreach (HtmlWidgetTrayEntry widget in widgets)
+            {
+                string componentName = widget.Name;
+                string label = showCanvasName && widget.CanvasName.Length > 0
+                    ? widget.CanvasName + " · " + componentName
+                    : componentName;
+                var item = new System.Windows.Forms.ToolStripMenuItem(FormatMenuText(label))
+                {
+                    ToolTipText = label
+                };
+                item.Click += (_, _) => ShowWidget(componentName);
+                _canvasMenu.DropDownItems.Add(item);
             }
         }
 

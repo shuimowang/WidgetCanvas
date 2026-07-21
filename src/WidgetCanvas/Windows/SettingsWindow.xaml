@@ -153,6 +153,32 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="ChannelRadioStyle" TargetType="RadioButton">
+            <Setter Property="MinWidth" Value="70" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Foreground" Value="#9FB0C5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="ChannelBackground" Background="Transparent" CornerRadius="7">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ChannelBackground" Property="Background" Value="#2A3B52" />
+                                <Setter Property="Foreground" Value="#E4EDF8" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ChannelBackground" Property="Background" Value="#356FAF" />
+                                <Setter Property="Foreground" Value="White" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Border Background="#101722" BorderBrush="#35475F" BorderThickness="1" CornerRadius="14">
@@ -362,13 +388,38 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel>
                                             <TextBlock Text="自动检查更新" Style="{StaticResource TitleStyle}" />
-                                            <TextBlock Text="启动后检查 GitHub Release；下载完成后校验 SHA-256，再询问是否重启安装。"
+                                            <TextBlock Text="按首选渠道检查 Release，失败时自动尝试另一渠道；下载后校验 SHA-256。"
                                                        Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
                                         </StackPanel>
                                         <ToggleButton x:Name="AutoUpdateToggle" Grid.Column="1"
                                                       Style="{StaticResource SwitchStyle}"
                                                       Checked="AutoUpdateToggle_Changed"
                                                       Unchecked="AutoUpdateToggle_Changed" />
+                                    </Grid>
+                                    <Grid Margin="0,16,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="首选更新渠道" Style="{StaticResource TitleStyle}" />
+                                            <TextBlock Text="国内网络推荐 Gitee；不可用时自动回退 GitHub。"
+                                                       Style="{StaticResource HintStyle}" Margin="0,5,18,0" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Padding="2" Background="#111B28"
+                                                BorderBrush="#31465F" BorderThickness="1" CornerRadius="9"
+                                                VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="GiteeUpdateRadio" Content="Gitee"
+                                                             GroupName="UpdateChannel"
+                                                             Style="{StaticResource ChannelRadioStyle}"
+                                                             Checked="UpdateChannelRadio_Changed" />
+                                                <RadioButton x:Name="GitHubUpdateRadio" Content="GitHub"
+                                                             GroupName="UpdateChannel"
+                                                             Style="{StaticResource ChannelRadioStyle}"
+                                                             Checked="UpdateChannelRadio_Changed" />
+                                            </StackPanel>
+                                        </Border>
                                     </Grid>
                                     <Grid Margin="0,16,0,0">
                                         <Grid.ColumnDefinitions>
@@ -396,11 +447,13 @@
                             <Border Style="{StaticResource CardStyle}">
                                 <StackPanel>
                                     <TextBlock Text="开源项目" Style="{StaticResource TitleStyle}" />
-                                    <TextBlock Text="github.com/shuimowang/WidgetCanvas"
+                                    <TextBlock Text="github.com/shuimowang/WidgetCanvas · gitee.com/shuimowang/WidgetCanvas"
                                                Style="{StaticResource HintStyle}" Margin="0,5,0,14" />
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="项目主页" Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
+                                        <Button Content="GitHub" Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
                                                 Click="ProjectButton_Click" />
+                                        <Button Content="Gitee" Style="{StaticResource ButtonStyle}" Margin="0,0,8,0"
+                                                Click="GiteeProjectButton_Click" />
                                         <Button Content="版本发布" Style="{StaticResource ButtonStyle}"
                                                 Margin="0,0,8,0" Click="ReleasesButton_Click" />
                                         <Button Content="反馈问题" Style="{StaticResource ButtonStyle}"

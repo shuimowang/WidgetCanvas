@@ -103,6 +103,8 @@ namespace WidgetCanvas
                 () => HtmlWidgetCanvasWindow.ShowLibraryWindow(activate: true),
                 componentName => HtmlWidgetCanvasWindow.ShowWidgetWindow(componentName, activate: true),
                 HtmlWidgetCanvasWindow.GetTrayEntries,
+                canvasName => HtmlWidgetCanvasWindow.ShowCanvasWindow(canvasName, activate: true),
+                HtmlWidgetCanvasWindow.GetCanvasTrayEntries,
                 ShowSettings,
                 () =>
                 {
@@ -164,6 +166,40 @@ namespace WidgetCanvas
             {
                 ShowSettings();
                 return;
+            }
+
+            string? canvasName = GetOptionValue(args, "--canvas", "-c", "/canvas");
+            if (canvasName != null)
+            {
+                if (string.IsNullOrWhiteSpace(canvasName))
+                {
+                    MessageBox.Show(
+                        "--canvas 后必须提供画布名称。",
+                        "WidgetCanvas",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
+                try
+                {
+                    HtmlWidgetCanvasWindow canvas = HtmlWidgetCanvasWindow.ShowCanvasWindow(
+                        canvasName,
+                        activate: true);
+                    if (MainWindow == null)
+                        MainWindow = canvas;
+                    canvas.Closed -= Canvas_Closed;
+                    canvas.Closed += Canvas_Closed;
+                    return;
+                }
+                catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException)
+                {
+                    MessageBox.Show(
+                        ex.Message,
+                        "WidgetCanvas",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
             }
 
             string? filePath = GetOptionValue(args, "--file", "--widget-file", "-f");
@@ -328,12 +364,12 @@ namespace WidgetCanvas
         {
             UpdateService updater = _updateService
                 ?? throw new InvalidOperationException("更新服务尚未初始化。");
-            UpdateCheckResult update = await updater.CheckAsync();
+            UpdateCheckResult update = await updater.CheckAsync(Settings.UpdateChannel);
             Settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
             SaveSettings();
 
             if (!update.IsUpdateAvailable)
-                return "当前已是最新版本 · " + update.CurrentVersion.ToString(3);
+                return $"当前已是最新版本 · {update.CurrentVersion.ToString(3)} · {UpdateService.GetChannelName(update.Channel)}";
 
             string stagedExecutable = await updater.DownloadAsync(update);
             string prompt = $"WidgetCanvas {update.LatestVersion} 已下载并通过 SHA-256 校验。\n\n立即重启并安装吗？";

@@ -13,6 +13,10 @@ namespace WidgetCanvas.HtmlWidgets
     {
         public required List<HtmlWidgetDefinition> Widgets { get; init; }
 
+        public required List<HtmlWidgetCanvasDefinition> Canvases { get; init; }
+
+        public required string ActiveCanvasId { get; init; }
+
         public string? Notice { get; init; }
 
         public bool RecoveredFromBackup { get; init; }
@@ -21,7 +25,11 @@ namespace WidgetCanvas.HtmlWidgets
     internal static class HtmlWidgetCanvasStore
     {
         private const int ContentFormatVersion = 1;
-        private const int RuntimeFormatVersion = 1;
+        private const int RuntimeFormatVersion = 2;
+
+        public const string DefaultCanvasId = "default";
+
+        public const string DefaultCanvasName = "默认画布";
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -45,19 +53,9 @@ namespace WidgetCanvas.HtmlWidgets
                 notices,
                 ref recoveredFromBackup);
 
-            if (content == null)
-            {
-                return new HtmlWidgetCanvasLoadResult
-                {
-                    Widgets = [],
-                    Notice = notices.Count == 0 ? null : string.Join("；", notices),
-                    RecoveredFromBackup = recoveredFromBackup
-                };
-            }
-
             RuntimeDocument? runtime = LoadDocumentWithBackup<RuntimeDocument>(
                 runtimeFilePath,
-                document => document.FormatVersion == RuntimeFormatVersion && document.Widgets != null,
+                document => (document.FormatVersion is 1 or RuntimeFormatVersion) && document.Widgets != null,
                 "运行状态",
                 notices,
                 ref recoveredFromBackup);
@@ -69,7 +67,7 @@ namespace WidgetCanvas.HtmlWidgets
 
             var widgets = new List<HtmlWidgetDefinition>();
             var ids = new HashSet<string>(StringComparer.Ordinal);
-            foreach (ContentWidget? item in content.Widgets)
+            foreach (ContentWidget? item in content?.Widgets ?? [])
             {
                 if (item == null)
                     continue;
@@ -94,9 +92,23 @@ namespace WidgetCanvas.HtmlWidgets
                 widgets.Add(widget);
             }
 
+            List<HtmlWidgetCanvasDefinition> canvases = NormalizeCanvases(runtime?.Canvases);
+            string activeCanvasId = runtime?.ActiveCanvasId?.Trim() ?? string.Empty;
+            if (!canvases.Any(canvas => string.Equals(canvas.Id, activeCanvasId, StringComparison.Ordinal)))
+                activeCanvasId = canvases[0].Id;
+
+            var canvasIds = canvases.Select(canvas => canvas.Id).ToHashSet(StringComparer.Ordinal);
+            foreach (HtmlWidgetDefinition widget in widgets)
+            {
+                if (!canvasIds.Contains(widget.CanvasId))
+                    widget.CanvasId = activeCanvasId;
+            }
+
             return new HtmlWidgetCanvasLoadResult
             {
                 Widgets = widgets,
+                Canvases = canvases,
+                ActiveCanvasId = activeCanvasId,
                 Notice = notices.Count == 0 ? null : string.Join("；", notices),
                 RecoveredFromBackup = recoveredFromBackup
             };
@@ -105,8 +117,19 @@ namespace WidgetCanvas.HtmlWidgets
         public static void Save(
             string contentFilePath,
             string runtimeFilePath,
-            IReadOnlyList<HtmlWidgetDefinition> widgets)
+            IReadOnlyList<HtmlWidgetDefinition> widgets,
+            IReadOnlyList<HtmlWidgetCanvasDefinition>? canvases = null,
+            string? activeCanvasId = null)
         {
+            List<HtmlWidgetCanvasDefinition> normalizedCanvases = NormalizeCanvases(canvases);
+            string normalizedActiveCanvasId = activeCanvasId?.Trim() ?? string.Empty;
+            if (!normalizedCanvases.Any(canvas => string.Equals(
+                    canvas.Id,
+                    normalizedActiveCanvasId,
+                    StringComparison.Ordinal)))
+            {
+                normalizedActiveCanvasId = normalizedCanvases[0].Id;
+            }
             var content = new ContentDocument
             {
                 FormatVersion = ContentFormatVersion,
@@ -121,6 +144,12 @@ namespace WidgetCanvas.HtmlWidgets
             {
                 FormatVersion = RuntimeFormatVersion,
                 SavedAtUtc = DateTimeOffset.UtcNow,
+                ActiveCanvasId = normalizedActiveCanvasId,
+                Canvases = normalizedCanvases.Select(canvas => new HtmlWidgetCanvasDefinition
+                {
+                    Id = canvas.Id,
+                    Name = canvas.Name
+                }).ToList(),
                 Widgets = widgets.Select(CreateRuntime).ToList()
             };
 
@@ -133,6 +162,9 @@ namespace WidgetCanvas.HtmlWidgets
             if (string.IsNullOrWhiteSpace(widget.Id))
                 widget.Id = Guid.NewGuid().ToString("N");
             widget.Html ??= string.Empty;
+            widget.CanvasId = string.IsNullOrWhiteSpace(widget.CanvasId)
+                ? DefaultCanvasId
+                : widget.CanvasId.Trim();
             widget.DetachedPosition = widget.DetachedPosition?.Trim() ?? string.Empty;
             widget.DetachedWidth = NormalizeOptionalSize(widget.DetachedWidth, 140);
             widget.DetachedHeight = NormalizeOptionalSize(widget.DetachedHeight, 90);
@@ -253,6 +285,7 @@ namespace WidgetCanvas.HtmlWidgets
             widget.Width = state.Width;
             widget.Height = state.Height;
             widget.IsLocked = state.IsLocked;
+            widget.CanvasId = state.CanvasId ?? DefaultCanvasId;
             widget.Home = state.Home;
             widget.DetachedPosition = state.DetachedPosition ?? string.Empty;
             widget.DetachedWidth = state.DetachedWidth;
@@ -270,6 +303,7 @@ namespace WidgetCanvas.HtmlWidgets
             Width = widget.Width,
             Height = widget.Height,
             IsLocked = widget.IsLocked,
+            CanvasId = widget.CanvasId,
             Home = widget.Home,
             DetachedPosition = widget.DetachedPosition,
             DetachedWidth = widget.DetachedWidth,
@@ -293,6 +327,33 @@ namespace WidgetCanvas.HtmlWidgets
         private static double NormalizeCoordinate(double value) =>
             double.IsFinite(value) ? Math.Max(0, value) : 0;
 
+        private static List<HtmlWidgetCanvasDefinition> NormalizeCanvases(
+            IReadOnlyList<HtmlWidgetCanvasDefinition>? canvases)
+        {
+            var result = new List<HtmlWidgetCanvasDefinition>();
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            var names = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
+            foreach (HtmlWidgetCanvasDefinition? canvas in canvases ?? [])
+            {
+                if (canvas == null)
+                    continue;
+                string id = canvas.Id?.Trim() ?? string.Empty;
+                string name = canvas.Name?.Trim() ?? string.Empty;
+                if (id.Length == 0 || name.Length == 0 || !ids.Add(id) || !names.Add(name))
+                    continue;
+                result.Add(new HtmlWidgetCanvasDefinition { Id = id, Name = name });
+            }
+            if (result.Count == 0)
+            {
+                result.Add(new HtmlWidgetCanvasDefinition
+                {
+                    Id = DefaultCanvasId,
+                    Name = DefaultCanvasName
+                });
+            }
+            return result;
+        }
+
         private sealed class ContentDocument
         {
             public int FormatVersion { get; set; }
@@ -315,6 +376,10 @@ namespace WidgetCanvas.HtmlWidgets
 
             public DateTimeOffset SavedAtUtc { get; set; }
 
+            public string ActiveCanvasId { get; set; } = DefaultCanvasId;
+
+            public List<HtmlWidgetCanvasDefinition>? Canvases { get; set; }
+
             public List<RuntimeWidget> Widgets { get; set; } = [];
         }
 
@@ -332,6 +397,8 @@ namespace WidgetCanvas.HtmlWidgets
 
             public bool IsLocked { get; set; }
 
+            public string CanvasId { get; set; } = DefaultCanvasId;
+
             public HtmlWidgetHome Home { get; set; } = HtmlWidgetHome.Canvas;
 
             public string DetachedPosition { get; set; } = string.Empty;
@@ -346,5 +413,6 @@ namespace WidgetCanvas.HtmlWidgets
 
             public Dictionary<string, JsonElement>? State { get; set; }
         }
+
     }
 }

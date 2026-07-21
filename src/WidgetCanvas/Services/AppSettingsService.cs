@@ -11,6 +11,8 @@ namespace WidgetCanvas.Services
     {
         public bool AutoUpdateEnabled { get; set; } = true;
 
+        public UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Gitee;
+
         public bool StartWithWindows { get; set; }
 
         public bool HotkeyEnabled { get; set; }
@@ -94,6 +96,8 @@ namespace WidgetCanvas.Services
                     settings.Hotkey = string.IsNullOrWhiteSpace(settings.Hotkey)
                         ? "Ctrl+Alt+W"
                         : settings.Hotkey.Trim();
+                    if (!Enum.IsDefined(settings.UpdateChannel))
+                        settings.UpdateChannel = UpdateChannel.Gitee;
                     settings.WebDavUrl = settings.WebDavUrl?.Trim() ?? string.Empty;
                     settings.WebDavUsername = settings.WebDavUsername?.Trim() ?? string.Empty;
                     settings.WebDavProtectedPassword ??= string.Empty;

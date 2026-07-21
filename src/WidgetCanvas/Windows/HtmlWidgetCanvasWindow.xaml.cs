@@ -58,6 +58,7 @@ namespace WidgetCanvas.Windows
         };
 
         private readonly List<HtmlWidgetDefinition> _widgets;
+        private readonly List<HtmlWidgetCanvasDefinition> _canvases;
         private readonly Dictionary<HtmlWidgetDefinition, WidgetRuntime> _runtimes = [];
         private readonly Dictionary<HtmlWidgetDefinition, HtmlWidgetWindow> _detachedWindows = [];
         private readonly Dictionary<string, HtmlWidgetDefinition> _fileWidgets =
@@ -95,6 +96,7 @@ namespace WidgetCanvas.Windows
         private double _resizeStartHeight;
         private Window? _controlOverlayWindow;
         private Canvas? _controlOverlayCanvas;
+        private Button? _canvasSwitchButton;
         private Border? _overlayToastPanel;
         private TextBlock? _overlayToastText;
         private WidgetRuntime? _hoverRuntime;
@@ -111,6 +113,7 @@ namespace WidgetCanvas.Windows
         private bool _isClosed;
         private bool _reloadingSynchronizedData;
         private WindowDockEngine? _detachedDockEngine;
+        private string _activeCanvasId;
 
         /// <summary>
         /// 用户可编辑和备份的组件 HTML 数据文件。应在首次打开窗口前设置。
@@ -182,6 +185,8 @@ namespace WidgetCanvas.Windows
                 DataFilePath,
                 RuntimeDataFilePath);
             _widgets = loadResult.Widgets;
+            _canvases = loadResult.Canvases;
+            _activeCanvasId = loadResult.ActiveCanvasId;
             _loadNotice = loadResult.Notice;
             _recoveredFromBackup = loadResult.RecoveredFromBackup;
             _catalogIntegration = new WidgetCatalogIntegration(AppPaths.WidgetIndexFilePath);
@@ -277,6 +282,23 @@ namespace WidgetCanvas.Windows
         }
 
         /// <summary>
+        /// 按名称切换并显示画布。画布名称忽略大小写，且在本机内唯一。
+        /// </summary>
+        public static HtmlWidgetCanvasWindow ShowCanvasWindow(string canvasName, bool activate = true)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(canvasName);
+            return InvokeOnUiThread(() =>
+            {
+                HtmlWidgetCanvasWindow window = ShowWindow(activate: activate);
+                HtmlWidgetCanvasDefinition canvas = window._canvases.FirstOrDefault(item =>
+                    string.Equals(item.Name, canvasName.Trim(), StringComparison.CurrentCultureIgnoreCase))
+                    ?? throw new KeyNotFoundException("找不到画布：" + canvasName.Trim());
+                window.SwitchCanvas(canvas.Id);
+                return window;
+            });
+        }
+
+        /// <summary>
         /// 返回供系统托盘使用的组件标题与归属快照。
         /// 每次打开托盘菜单都会重新读取，因此无需维护另一份菜单状态。
         /// </summary>
@@ -285,9 +307,29 @@ namespace WidgetCanvas.Windows
             return InvokeOnUiThread(() =>
             {
                 HtmlWidgetCanvasWindow host = _instance ??= new HtmlWidgetCanvasWindow();
+                Dictionary<string, string> canvasNames = host._canvases.ToDictionary(
+                    canvas => canvas.Id,
+                    canvas => canvas.Name,
+                    StringComparer.Ordinal);
                 return host._widgets
-                    .Select(widget => new HtmlWidgetTrayEntry(GetDisplayName(widget), widget.Home))
+                    .Select(widget => new HtmlWidgetTrayEntry(
+                        GetDisplayName(widget),
+                        widget.Home,
+                        canvasNames.GetValueOrDefault(widget.CanvasId, string.Empty)))
                     .OrderBy(entry => entry.Name, StringComparer.CurrentCultureIgnoreCase)
+                    .ToArray();
+            });
+        }
+
+        internal static IReadOnlyList<HtmlWidgetCanvasTrayEntry> GetCanvasTrayEntries()
+        {
+            return InvokeOnUiThread(() =>
+            {
+                HtmlWidgetCanvasWindow host = _instance ??= new HtmlWidgetCanvasWindow();
+                return host._canvases
+                    .Select(canvas => new HtmlWidgetCanvasTrayEntry(
+                        canvas.Name,
+                        string.Equals(canvas.Id, host._activeCanvasId, StringComparison.Ordinal)))
                     .ToArray();
             });
         }
@@ -500,6 +542,7 @@ namespace WidgetCanvas.Windows
             var widget = new HtmlWidgetDefinition
             {
                 Html = normalizedHtml,
+                CanvasId = _activeCanvasId,
                 X = Math.Max(0, bounds.X),
                 Y = Math.Max(0, bounds.Y),
                 Width = Math.Max(MinimumWidgetWidth, bounds.Width),
@@ -765,7 +808,10 @@ namespace WidgetCanvas.Windows
             }
 
             if (action == HtmlWidgetWindow.DetachedCloseAction.Canvas)
+            {
                 widget.Home = HtmlWidgetHome.Canvas;
+                SwitchCanvas(widget.CanvasId, showToast: false);
+            }
             else if (action == HtmlWidgetWindow.DetachedCloseAction.Library)
                 widget.Home = HtmlWidgetHome.Library;
 
@@ -861,7 +907,7 @@ namespace WidgetCanvas.Windows
 
             _isLoadedOnce = true;
             CreateControlOverlayWindow();
-            foreach (HtmlWidgetDefinition widget in _widgets.Where(item => item.Home == HtmlWidgetHome.Canvas))
+            foreach (HtmlWidgetDefinition widget in _widgets.Where(IsWidgetOnActiveCanvas))
                 AddWidgetFrame(widget);
             ClampAllWidgetsToCanvas();
             UpdateEmptyState();
@@ -1014,6 +1060,14 @@ namespace WidgetCanvas.Windows
                 Focusable = false
             };
             copyPromptButton.Click += CopyGeneralPromptButton_Click;
+            _canvasSwitchButton = new Button
+            {
+                ToolTip = "切换或管理画布",
+                Style = toolButtonStyle,
+                Focusable = false
+            };
+            _canvasSwitchButton.Click += CanvasSwitchButton_Click;
+            UpdateCanvasSwitchButton();
             var libraryButton = new Button
             {
                 Content = "组件库",
@@ -1024,6 +1078,7 @@ namespace WidgetCanvas.Windows
             libraryButton.Click += (_, _) => ShowWidgetLibrary();
             var toolButtons = new StackPanel { Orientation = Orientation.Horizontal };
             toolButtons.Children.Add(copyPromptButton);
+            toolButtons.Children.Add(_canvasSwitchButton);
             toolButtons.Children.Add(libraryButton);
 
             var bottomDock = new Border
@@ -1136,6 +1191,7 @@ namespace WidgetCanvas.Windows
             _controlOverlayCanvas = null;
             _overlayToastPanel = null;
             _overlayToastText = null;
+            _canvasSwitchButton = null;
             if (overlay == null)
                 return;
             try
@@ -1334,7 +1390,7 @@ namespace WidgetCanvas.Windows
 
         private void AddWidgetFrame(HtmlWidgetDefinition widget)
         {
-            if (widget.Home != HtmlWidgetHome.Canvas ||
+            if (!IsWidgetOnActiveCanvas(widget) ||
                 _detachedWindows.ContainsKey(widget) ||
                 _runtimes.ContainsKey(widget))
                 return;
@@ -1956,6 +2012,7 @@ namespace WidgetCanvas.Windows
             var copy = new HtmlWidgetDefinition
             {
                 Html = copyHtml,
+                CanvasId = placeOnCanvas ? _activeCanvasId : source.CanvasId,
                 X = source.X + 28,
                 Y = source.Y + 28,
                 Width = source.Width,
@@ -2007,6 +2064,7 @@ namespace WidgetCanvas.Windows
 
             HideWidgetLibrary();
             widget.Home = HtmlWidgetHome.Canvas;
+            widget.CanvasId = _activeCanvasId;
             AddWidgetFrame(widget);
             ClampWidgetToCanvas(widget);
             if (_runtimes.TryGetValue(widget, out WidgetRuntime? runtime))
@@ -2235,8 +2293,8 @@ namespace WidgetCanvas.Windows
                 ? $"{_widgets.Count} 个"
                 : $"{matches.Count} / {_widgets.Count} 个";
             LibraryCountText.Text = windowCount > 0
-                ? $"{matchText} · {activeCount} 个在浮岛 · {windowCount} 个窗口"
-                : $"{matchText} · {activeCount} 个在浮岛";
+                ? $"{matchText} · {activeCount} 个在画布 · {windowCount} 个窗口"
+                : $"{matchText} · {activeCount} 个在画布";
             LibraryItemsPanel.Children.Clear();
             foreach (HtmlWidgetDefinition widget in matches)
                 LibraryItemsPanel.Children.Add(CreateLibraryRow(widget));
@@ -2251,6 +2309,8 @@ namespace WidgetCanvas.Windows
         {
             bool isSelected = _libraryPreviewWidget == widget;
             bool isDetached = _detachedWindows.ContainsKey(widget);
+            bool isOnActiveCanvas = IsWidgetOnActiveCanvas(widget);
+            string canvasName = GetCanvasName(widget.CanvasId);
             bool hasError = _runtimes.TryGetValue(widget, out WidgetRuntime? runtime) &&
                             !string.IsNullOrWhiteSpace(runtime.LastError);
             var status = new TextBlock
@@ -2260,8 +2320,10 @@ namespace WidgetCanvas.Windows
                     ? new SolidColorBrush(Color.FromRgb(230, 112, 129))
                     : isDetached
                         ? new SolidColorBrush(Color.FromRgb(126, 177, 235))
-                    : widget.Home == HtmlWidgetHome.Canvas
+                    : isOnActiveCanvas
                         ? new SolidColorBrush(Color.FromRgb(105, 210, 157))
+                    : widget.Home == HtmlWidgetHome.Canvas
+                        ? new SolidColorBrush(Color.FromRgb(139, 157, 216))
                         : new SolidColorBrush(Color.FromRgb(88, 106, 132)),
                 FontSize = 9,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -2269,7 +2331,7 @@ namespace WidgetCanvas.Windows
                 ToolTip = hasError
                     ? "组件发生错误"
                     : isDetached ? "正在独立窗口中使用"
-                    : widget.Home == HtmlWidgetHome.Canvas ? "正在浮岛中使用" : "已收进组件库"
+                    : widget.Home == HtmlWidgetHome.Canvas ? "位于画布“" + canvasName + "”" : "已收进组件库"
             };
             var name = new TextBlock
             {
@@ -2281,7 +2343,7 @@ namespace WidgetCanvas.Windows
             };
             var meta = new TextBlock
             {
-                Text = $"{widget.Width:0} × {widget.Height:0}  ·  {(hasError ? "异常" : isDetached ? "独立窗口" : widget.Home == HtmlWidgetHome.Canvas ? "在浮岛" : "在组件库")}",
+                Text = $"{widget.Width:0} × {widget.Height:0}  ·  {(hasError ? "异常" : isDetached ? "独立窗口" : widget.Home == HtmlWidgetHome.Canvas ? canvasName : "组件库")}",
                 Foreground = new SolidColorBrush(Color.FromRgb(111, 133, 165)),
                 FontSize = 10.5,
                 Margin = new Thickness(0, 3, 0, 0)
@@ -2292,7 +2354,7 @@ namespace WidgetCanvas.Windows
 
             var toggleButton = new Button
             {
-                Content = isDetached ? "显示" : widget.Home == HtmlWidgetHome.Canvas ? "收进" : "放回",
+                Content = isDetached ? "显示" : isOnActiveCanvas ? "收进" : widget.Home == HtmlWidgetHome.Canvas ? "查看" : "放回",
                 MinWidth = 54,
                 Padding = new Thickness(10, 5, 10, 5),
                 Margin = new Thickness(8, 0, 2, 0),
@@ -2305,8 +2367,10 @@ namespace WidgetCanvas.Windows
             {
                 if (isDetached)
                     ShowDetachedWidget(widget, owner: null, activate: true, initialPosition: null, hideCanvasAfterOpen: false);
-                else if (widget.Home == HtmlWidgetHome.Canvas)
+                else if (isOnActiveCanvas)
                     ArchiveWidget(widget);
+                else if (widget.Home == HtmlWidgetHome.Canvas)
+                    ShowWidgetOnItsCanvas(widget);
                 else
                     RestoreWidget(widget);
             };
@@ -2637,6 +2701,7 @@ namespace WidgetCanvas.Windows
         private void OpenLibraryWidgetMenu(HtmlWidgetDefinition widget, FrameworkElement target)
         {
             bool isDetached = _detachedWindows.ContainsKey(widget);
+            bool isOnActiveCanvas = IsWidgetOnActiveCanvas(widget);
             var menu = new ContextMenu
             {
                 PlacementTarget = target,
@@ -2644,13 +2709,15 @@ namespace WidgetCanvas.Windows
             };
             HtmlWidgetMenuTheme.Apply(menu);
             menu.Items.Add(CreateMenuItem(
-                isDetached ? "显示独立窗口" : widget.Home == HtmlWidgetHome.Canvas ? "收进组件库" : "放回浮岛",
+                isDetached ? "显示独立窗口" : isOnActiveCanvas ? "收进组件库" : widget.Home == HtmlWidgetHome.Canvas ? "打开所在画布" : "放回当前画布",
                 () =>
                 {
                     if (isDetached)
                         ShowDetachedWidget(widget, owner: null, activate: true, initialPosition: null, hideCanvasAfterOpen: false);
-                    else if (widget.Home == HtmlWidgetHome.Canvas)
+                    else if (isOnActiveCanvas)
                         ArchiveWidget(widget);
+                    else if (widget.Home == HtmlWidgetHome.Canvas)
+                        ShowWidgetOnItsCanvas(widget);
                     else
                         RestoreWidget(widget);
                 }));
@@ -2688,6 +2755,20 @@ namespace WidgetCanvas.Windows
                 "删除组件…",
                 () => DeleteWidgetPermanently(widget)));
             menu.IsOpen = true;
+        }
+
+        private string GetCanvasName(string canvasId) =>
+            _canvases.FirstOrDefault(canvas => string.Equals(
+                canvas.Id,
+                canvasId,
+                StringComparison.Ordinal))?.Name ?? ActiveCanvas.Name;
+
+        private void ShowWidgetOnItsCanvas(HtmlWidgetDefinition widget)
+        {
+            HideWidgetLibrary(restoreCanvas: false);
+            SwitchCanvas(widget.CanvasId);
+            if (_runtimes.TryGetValue(widget, out WidgetRuntime? runtime))
+                BringToFront(runtime);
         }
 
         private void EditWidgetFromLibrary(HtmlWidgetDefinition widget)
@@ -2963,6 +3044,180 @@ namespace WidgetCanvas.Windows
             string prompt = HtmlWidgetCanvasPrompt.BuildCreateTemplate();
             if (CopyText(prompt, "提示词已复制，在末尾补充需求即可"))
                 _ = Dispatcher.BeginInvoke(HideWindow);
+        }
+
+        private bool IsWidgetOnActiveCanvas(HtmlWidgetDefinition widget) =>
+            widget.Home == HtmlWidgetHome.Canvas &&
+            string.Equals(widget.CanvasId, _activeCanvasId, StringComparison.Ordinal);
+
+        private HtmlWidgetCanvasDefinition ActiveCanvas =>
+            _canvases.First(canvas => string.Equals(canvas.Id, _activeCanvasId, StringComparison.Ordinal));
+
+        private void UpdateCanvasSwitchButton()
+        {
+            if (_canvasSwitchButton == null)
+                return;
+            string name = ActiveCanvas.Name;
+            _canvasSwitchButton.Content = name.Length <= 12 ? name + " ⌄" : name[..11] + "… ⌄";
+            _canvasSwitchButton.ToolTip = "当前画布：" + name;
+        }
+
+        private void CanvasSwitchButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button)
+                return;
+            var menu = new ContextMenu
+            {
+                PlacementTarget = button,
+                Placement = System.Windows.Controls.Primitives.PlacementMode.Top
+            };
+            HtmlWidgetMenuTheme.Apply(menu);
+            foreach (HtmlWidgetCanvasDefinition canvas in _canvases)
+            {
+                string canvasId = canvas.Id;
+                var item = new MenuItem
+                {
+                    Header = canvas.Name,
+                    IsCheckable = true,
+                    IsChecked = string.Equals(canvas.Id, _activeCanvasId, StringComparison.Ordinal)
+                };
+                item.Click += (_, _) => SwitchCanvas(canvasId);
+                menu.Items.Add(item);
+            }
+            menu.Items.Add(new Separator());
+            menu.Items.Add(CreateMenuItem("新建画布…", CreateCanvas));
+            menu.Items.Add(CreateMenuItem("重命名当前画布…", RenameActiveCanvas));
+            var deleteItem = CreateDangerMenuItem("删除当前画布…", DeleteActiveCanvas);
+            deleteItem.IsEnabled = _canvases.Count > 1;
+            menu.Items.Add(deleteItem);
+            menu.IsOpen = true;
+        }
+
+        private void SwitchCanvas(string canvasId, bool showToast = true)
+        {
+            HtmlWidgetCanvasDefinition? canvas = _canvases.FirstOrDefault(item =>
+                string.Equals(item.Id, canvasId, StringComparison.Ordinal));
+            if (canvas == null || string.Equals(_activeCanvasId, canvas.Id, StringComparison.Ordinal))
+                return;
+
+            if (_composingWebViews.Count > 0)
+                CancelWidgetComposition();
+            SetWebViewsVisible(false);
+            foreach (HtmlWidgetDefinition widget in _runtimes.Keys.ToList())
+                RemoveWidgetFrame(widget);
+            _activeCanvasId = canvas.Id;
+            if (_isLoadedOnce)
+            {
+                foreach (HtmlWidgetDefinition widget in _widgets.Where(IsWidgetOnActiveCanvas))
+                    AddWidgetFrame(widget);
+                ClampAllWidgetsToCanvas();
+            }
+            UpdateEmptyState();
+            UpdateCanvasSwitchButton();
+            MarkDirty();
+            SetWebViewsVisible(WidgetEditorLayer.Visibility != Visibility.Visible &&
+                               WidgetLibraryLayer.Visibility != Visibility.Visible);
+            ApplyOverlayWindowVisibility();
+            if (showToast)
+                ShowToast("已切换到“" + canvas.Name + "”");
+        }
+
+        private void CreateCanvas()
+        {
+            string? name = ShowCanvasNameDialog("新建画布");
+            if (name == null)
+                return;
+            if (_canvases.Any(item => string.Equals(
+                    item.Name,
+                    name,
+                    StringComparison.CurrentCultureIgnoreCase)))
+            {
+                ShowToast("已存在同名画布");
+                return;
+            }
+            var canvas = new HtmlWidgetCanvasDefinition { Name = name };
+            _canvases.Add(canvas);
+            MarkDirty();
+            SwitchCanvas(canvas.Id);
+        }
+
+        private void RenameActiveCanvas()
+        {
+            HtmlWidgetCanvasDefinition canvas = ActiveCanvas;
+            string? name = ShowCanvasNameDialog("重命名画布", canvas.Name);
+            if (name == null || string.Equals(name, canvas.Name, StringComparison.Ordinal))
+                return;
+            if (_canvases.Any(item => item != canvas && string.Equals(
+                    item.Name,
+                    name,
+                    StringComparison.CurrentCultureIgnoreCase)))
+            {
+                ShowToast("已存在同名画布");
+                return;
+            }
+            canvas.Name = name;
+            UpdateCanvasSwitchButton();
+            MarkDirty();
+            ShowToast("画布已重命名");
+        }
+
+        private void DeleteActiveCanvas()
+        {
+            if (_canvases.Count <= 1)
+                return;
+            HtmlWidgetCanvasDefinition canvas = ActiveCanvas;
+            int count = _widgets.Count(widget => string.Equals(
+                widget.CanvasId,
+                canvas.Id,
+                StringComparison.Ordinal));
+            MessageBoxResult result = MessageBox.Show(
+                this,
+                count == 0
+                    ? $"确定删除画布“{canvas.Name}”吗？"
+                    : $"确定删除画布“{canvas.Name}”吗？\n\n其中 {count} 个组件会安全收进组件库，不会删除组件内容。",
+                "删除画布",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            HtmlWidgetCanvasDefinition next = _canvases.First(item => item != canvas);
+            foreach (HtmlWidgetDefinition widget in _widgets.Where(item =>
+                         string.Equals(item.CanvasId, canvas.Id, StringComparison.Ordinal)))
+            {
+                widget.Home = HtmlWidgetHome.Library;
+                widget.CanvasId = next.Id;
+                if (_detachedWindows.TryGetValue(widget, out HtmlWidgetWindow? detached))
+                    detached.MoveToLibrary();
+            }
+            _canvases.Remove(canvas);
+            _activeCanvasId = next.Id;
+            foreach (HtmlWidgetDefinition widget in _runtimes.Keys.ToList())
+                RemoveWidgetFrame(widget);
+            if (_isLoadedOnce)
+            {
+                foreach (HtmlWidgetDefinition widget in _widgets.Where(IsWidgetOnActiveCanvas))
+                    AddWidgetFrame(widget);
+            }
+            UpdateCanvasSwitchButton();
+            UpdateEmptyState();
+            RefreshWidgetLibrary();
+            MarkDirty();
+            ShowToast("画布已删除，组件已收进组件库");
+        }
+
+        private string? ShowCanvasNameDialog(string title, string initialName = "")
+        {
+            HideControlOverlayWindow();
+            try
+            {
+                var dialog = new CanvasNameDialog(title, initialName) { Owner = this };
+                return dialog.ShowDialog() == true ? dialog.CanvasName : null;
+            }
+            finally
+            {
+                ApplyOverlayWindowVisibility();
+            }
         }
 
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -4099,7 +4354,7 @@ namespace WidgetCanvas.Windows
         private void UpdateEmptyState()
         {
             EmptyStatePanel.Visibility = _widgets.Any(widget =>
-                widget.Home == HtmlWidgetHome.Canvas && !_detachedWindows.ContainsKey(widget))
+                IsWidgetOnActiveCanvas(widget) && !_detachedWindows.ContainsKey(widget))
                 ? Visibility.Collapsed
                 : Visibility.Visible;
         }
@@ -4123,7 +4378,12 @@ namespace WidgetCanvas.Windows
                 return true;
             try
             {
-                HtmlWidgetCanvasStore.Save(DataFilePath, RuntimeDataFilePath, _widgets);
+                HtmlWidgetCanvasStore.Save(
+                    DataFilePath,
+                    RuntimeDataFilePath,
+                    _widgets,
+                    _canvases,
+                    _activeCanvasId);
                 foreach (HtmlWidgetDefinition fileWidget in _fileWidgets.Values)
                     HtmlFileWidgetStateStore.Save(fileWidget);
                 _saveDirty = false;
@@ -4241,9 +4501,13 @@ namespace WidgetCanvas.Windows
                     RuntimeDataFilePath);
                 _widgets.Clear();
                 _widgets.AddRange(loaded.Widgets);
+                _canvases.Clear();
+                _canvases.AddRange(loaded.Canvases);
+                _activeCanvasId = loaded.ActiveCanvasId;
+                UpdateCanvasSwitchButton();
                 if (_isLoadedOnce)
                 {
-                    foreach (HtmlWidgetDefinition widget in _widgets.Where(item => item.Home == HtmlWidgetHome.Canvas))
+                    foreach (HtmlWidgetDefinition widget in _widgets.Where(IsWidgetOnActiveCanvas))
                         AddWidgetFrame(widget);
                     ClampAllWidgetsToCanvas();
                 }

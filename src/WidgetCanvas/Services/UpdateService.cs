@@ -7,17 +7,25 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace WidgetCanvas.Services
 {
+    internal enum UpdateChannel
+    {
+        Gitee,
+        GitHub
+    }
+
     internal sealed record UpdateCheckResult(
         Version CurrentVersion,
         Version LatestVersion,
         string ReleaseUrl,
         string DownloadUrl,
-        string ChecksumUrl)
+        string ChecksumUrl,
+        UpdateChannel Channel)
     {
         public bool IsUpdateAvailable => LatestVersion > CurrentVersion;
     }
@@ -27,7 +35,13 @@ namespace WidgetCanvas.Services
         public const string ProjectUrl = "https://github.com/shuimowang/WidgetCanvas";
         public const string ReleasesUrl = ProjectUrl + "/releases";
         public const string FeedbackUrl = ProjectUrl + "/issues/new";
-        private const string LatestReleaseUrl = ReleasesUrl + "/latest";
+        public const string GiteeProjectUrl = "https://gitee.com/shuimowang/WidgetCanvas";
+        public const string GiteeReleasesUrl = GiteeProjectUrl + "/releases";
+        private const string GitHubLatestReleaseUrl = ReleasesUrl + "/latest";
+        private const string GiteeLatestReleaseApiUrl =
+            "https://gitee.com/api/v5/repos/shuimowang/WidgetCanvas/releases/latest";
+        private const string GiteeApiRoot =
+            "https://gitee.com/api/v5/repos/shuimowang/WidgetCanvas/releases/";
         private const string ExecutableAssetName = "WidgetCanvas-win-x64.exe";
         private const string ChecksumAssetName = ExecutableAssetName + ".sha256";
         private const long MaximumExecutableBytes = 200L * 1024 * 1024;
@@ -37,13 +51,43 @@ namespace WidgetCanvas.Services
         public static Version CurrentVersion =>
             typeof(UpdateService).Assembly.GetName().Version ?? new Version(0, 0, 0);
 
-        public async Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken = default)
+        public async Task<UpdateCheckResult> CheckAsync(
+            UpdateChannel preferredChannel = UpdateChannel.Gitee,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                return preferredChannel == UpdateChannel.Gitee
+                    ? await CheckGiteeAsync(cancellationToken)
+                    : await CheckGitHubAsync(cancellationToken);
+            }
+            catch (Exception first) when (IsChannelFailure(first, cancellationToken))
+            {
+                try
+                {
+                    return preferredChannel == UpdateChannel.Gitee
+                        ? await CheckGitHubAsync(cancellationToken)
+                        : await CheckGiteeAsync(cancellationToken);
+                }
+                catch (Exception second) when (IsChannelFailure(second, cancellationToken))
+                {
+                    throw new InvalidOperationException(
+                        "Gitee 与 GitHub 更新渠道均不可用。\n\n" +
+                        $"首选渠道：{GetChannelName(preferredChannel)}\n" +
+                        $"{GetChannelName(preferredChannel)}：{first.Message}\n" +
+                        $"{GetChannelName(preferredChannel == UpdateChannel.Gitee ? UpdateChannel.GitHub : UpdateChannel.Gitee)}：{second.Message}",
+                        new AggregateException(first, second));
+                }
+            }
+        }
+
+        private async Task<UpdateCheckResult> CheckGitHubAsync(CancellationToken cancellationToken)
         {
             // GitHub REST API gives unauthenticated clients a small shared rate limit.
             // The public /releases/latest page redirects to the current release tag and
             // provides everything the updater needs without consuming that quota.
             using HttpResponseMessage response = await HttpClient.GetAsync(
-                LatestReleaseUrl,
+                GitHubLatestReleaseUrl,
                 HttpCompletionOption.ResponseHeadersRead,
                 cancellationToken);
             if (!response.IsSuccessStatusCode)
@@ -57,6 +101,59 @@ namespace WidgetCanvas.Services
             return ParseLatestReleaseUri(releaseUri, CurrentVersion);
         }
 
+        private async Task<UpdateCheckResult> CheckGiteeAsync(CancellationToken cancellationToken)
+        {
+            using HttpResponseMessage response = await HttpClient.GetAsync(
+                GiteeLatestReleaseApiUrl,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException(
+                    $"Gitee 返回 HTTP {(int)response.StatusCode}（{response.ReasonPhrase}）。");
+            }
+
+            await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            JsonElement root = document.RootElement;
+            string tag = GetRequiredString(root, "tag_name", "Gitee Release 缺少版本号。");
+            Version latestVersion = ParseVersion(tag, "Gitee Release");
+            string downloadUrl = FindAssetUrl(root, ExecutableAssetName);
+            string checksumUrl = FindAssetUrl(root, ChecksumAssetName);
+
+            if ((downloadUrl.Length == 0 || checksumUrl.Length == 0) &&
+                root.TryGetProperty("id", out JsonElement idElement) &&
+                idElement.TryGetInt64(out long releaseId))
+            {
+                using HttpResponseMessage assetsResponse = await HttpClient.GetAsync(
+                    GiteeApiRoot + releaseId.ToString(CultureInfo.InvariantCulture) + "/attach_files",
+                    HttpCompletionOption.ResponseHeadersRead,
+                    cancellationToken);
+                if (assetsResponse.IsSuccessStatusCode)
+                {
+                    await using Stream assetsStream = await assetsResponse.Content.ReadAsStreamAsync(cancellationToken);
+                    using JsonDocument assetsDocument = await JsonDocument.ParseAsync(
+                        assetsStream,
+                        cancellationToken: cancellationToken);
+                    if (downloadUrl.Length == 0)
+                        downloadUrl = FindAssetUrl(assetsDocument.RootElement, ExecutableAssetName, releaseId);
+                    if (checksumUrl.Length == 0)
+                        checksumUrl = FindAssetUrl(assetsDocument.RootElement, ChecksumAssetName, releaseId);
+                }
+            }
+
+            if (downloadUrl.Length == 0 || checksumUrl.Length == 0)
+                throw new InvalidDataException("Gitee 最新发行版缺少自动更新文件。");
+
+            return new UpdateCheckResult(
+                NormalizeVersion(CurrentVersion),
+                NormalizeVersion(latestVersion),
+                GiteeProjectUrl + "/releases/tag/" + Uri.EscapeDataString(tag),
+                downloadUrl,
+                checksumUrl,
+                UpdateChannel.Gitee);
+        }
+
         internal static UpdateCheckResult ParseLatestReleaseUri(Uri releaseUri, Version currentVersion)
         {
             ArgumentNullException.ThrowIfNull(releaseUri);
@@ -67,8 +164,7 @@ namespace WidgetCanvas.Services
 
             string tag = Uri.UnescapeDataString(releaseUri.AbsolutePath[(tagIndex + releaseTagPath.Length)..])
                 .Trim('/');
-            if (!Version.TryParse(tag.Trim().TrimStart('v', 'V'), out Version? latestVersion))
-                throw new InvalidDataException("GitHub Release 的版本号无效：" + tag);
+            Version latestVersion = ParseVersion(tag, "GitHub Release");
 
             string releaseUrl = ProjectUrl + releaseTagPath + Uri.EscapeDataString(tag);
             string assetRoot = ProjectUrl + "/releases/download/" + Uri.EscapeDataString(tag) + "/";
@@ -77,8 +173,77 @@ namespace WidgetCanvas.Services
                 NormalizeVersion(latestVersion),
                 releaseUrl,
                 assetRoot + ExecutableAssetName,
-                assetRoot + ChecksumAssetName);
+                assetRoot + ChecksumAssetName,
+                UpdateChannel.GitHub);
         }
+
+        private static Version ParseVersion(string tag, string source)
+        {
+            if (!Version.TryParse(tag.Trim().TrimStart('v', 'V'), out Version? version))
+                throw new InvalidDataException(source + " 的版本号无效：" + tag);
+            return version;
+        }
+
+        private static string GetRequiredString(JsonElement root, string name, string error)
+        {
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty(name, out JsonElement value) &&
+                value.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(value.GetString()))
+            {
+                return value.GetString()!.Trim();
+            }
+            throw new InvalidDataException(error);
+        }
+
+        internal static string FindAssetUrl(
+            JsonElement root,
+            string assetName,
+            long? releaseId = null)
+        {
+            JsonElement assets = root;
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("assets", out JsonElement nestedAssets))
+            {
+                assets = nestedAssets;
+            }
+            if (assets.ValueKind != JsonValueKind.Array)
+                return string.Empty;
+
+            foreach (JsonElement asset in assets.EnumerateArray())
+            {
+                if (asset.ValueKind != JsonValueKind.Object ||
+                    !asset.TryGetProperty("name", out JsonElement name) ||
+                    !string.Equals(name.GetString(), assetName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                foreach (string propertyName in new[] { "browser_download_url", "download_url" })
+                {
+                    if (asset.TryGetProperty(propertyName, out JsonElement url) &&
+                        url.ValueKind == JsonValueKind.String &&
+                        Uri.TryCreate(url.GetString(), UriKind.Absolute, out Uri? parsed) &&
+                        parsed.Scheme == Uri.UriSchemeHttps)
+                    {
+                        return parsed.AbsoluteUri;
+                    }
+                }
+                if (releaseId.HasValue && asset.TryGetProperty("id", out JsonElement id) &&
+                    id.TryGetInt64(out long assetId))
+                {
+                    return GiteeApiRoot + releaseId.Value.ToString(CultureInfo.InvariantCulture) +
+                           "/attach_files/" + assetId.ToString(CultureInfo.InvariantCulture) + "/download";
+                }
+            }
+            return string.Empty;
+        }
+
+        internal static string GetChannelName(UpdateChannel channel) =>
+            channel == UpdateChannel.Gitee ? "Gitee" : "GitHub";
+
+        private static bool IsChannelFailure(Exception exception, CancellationToken cancellationToken) =>
+            !cancellationToken.IsCancellationRequested &&
+            exception is HttpRequestException or InvalidDataException or JsonException or TaskCanceledException;
 
         public async Task<string> DownloadAsync(
             UpdateCheckResult update,

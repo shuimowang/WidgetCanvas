@@ -17,6 +17,9 @@ WidgetCanvas.exe --list-widgets --output "%TEMP%\WidgetCanvas-widgets.json"
 # 按 title 显示或聚焦独立组件窗口，匹配不区分大小写
 WidgetCanvas.exe --widget "便签"
 
+# 按名称切换并显示画布，匹配不区分大小写
+WidgetCanvas.exe --canvas "工作"
+
 # 读取 HTML 文件并显示为独立组件窗口，不加入画布或组件库
 WidgetCanvas.exe --file "D:\Widgets\clock.html"
 
@@ -31,6 +34,8 @@ WidgetCanvas.exe --exit
 ```
 
 `--list-widgets` 直接读取已经落盘的组件目录，无论主程序是否正在运行都能使用。成功退出码为 `0`，失败为 `2`。组件标题具有唯一性；找不到标题或存在歧义时不会误开其他组件。
+
+`--canvas` 也接受别名 `-c` 和 `/canvas`。画布名称在本机内唯一；组件库由所有画布共享，切换画布不会影响已经弹出的独立组件窗口。
 
 `--file` 也接受别名 `--widget-file` 和 `-f`。文件必须是 UTF-8，或带 BOM 的 UTF-16/UTF-32 编码，且是 UTF-8 大小不超过 2 MB 的完整单文件 HTML。它不会写入组件目录；同一路径再次调用会重新读取文件并聚焦已有窗口。窗口布局、置顶、贴边隐藏和 `host.state` 按规范化绝对路径保存在 `%LocalAppData%\浮岛\State\FileWidgets`。关闭窗口不会删除源文件。
 

@@ -28,7 +28,7 @@ Synchronized:
 
 Kept on each device:
 
-- canvas position, size, and z-order;
+- named canvases, active canvas, and each widget's local canvas assignment, position, size, and z-order;
 - detached-window bounds, topmost state, and edge auto-hide settings;
 - WebView2 cache, cookies, and sessions;
 - application settings, hotkeys, logs, and local files;

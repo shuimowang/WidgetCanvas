@@ -14,13 +14,13 @@ WidgetCanvas is an AI-first desktop widget canvas for Windows. Describe a widget
 - **AI-first workflow:** copy the built-in prompt, describe what you need, and paste one HTML file.
 - **No custom widget language:** widgets are ordinary HTML, CSS, and JavaScript with visible source.
 - **Desktop capabilities:** state, clipboard, HTTP, read-only files, known folders, and parameterized process execution.
-- **Flexible placement:** drag, resize, lock, archive, search, or detach a widget into its own window.
+- **Flexible placement:** use multiple named canvases, then drag, resize, lock, archive, search, or detach widgets.
 - **Designed for long-running widgets:** hiding the canvas keeps active widgets running.
 - **Local by default:** data stays on your computer unless you opt into sync through your own WebDAV service.
 
 ## Quick start
 
-1. Download `WidgetCanvas-win-x64.zip` from [Releases](https://github.com/shuimowang/WidgetCanvas/releases).
+1. Download `WidgetCanvas-win-x64.zip` from [Gitee Releases](https://gitee.com/shuimowang/WidgetCanvas/releases) or [GitHub Releases](https://github.com/shuimowang/WidgetCanvas/releases).
 2. Extract it and run `WidgetCanvas.exe`.
 3. Click **复制 AI 提示词**, send it to any AI, and add your widget requirements.
 4. Copy the returned complete HTML document.
@@ -39,6 +39,8 @@ Windows 10/11 x64 is supported. WidgetCanvas is self-contained and does not requ
 - Open **Management Center** from the tray to configure automatic updates, WebDAV sync, launch to the tray at sign-in, and a global canvas hotkey.
 - Right-click a widget to edit, reload, lock, detach, archive, duplicate, or delete it.
 - Hold `Ctrl` while dragging a widget handle to detach it into a standalone window.
+- Click the current canvas name in the bottom dock to switch, create, rename, or delete canvases. The library is shared globally.
+- Use `WidgetCanvas.exe --canvas "Work"` to switch to and show a named canvas.
 - Use `WidgetCanvas.exe --widget "Widget title"` to open one widget directly by its HTML `<title>`.
 - Use `WidgetCanvas.exe --file "D:\Widgets\clock.html"` to load an HTML file as a standalone widget without adding it to the library.
 - Use `WidgetCanvas.exe --settings` to open Management Center, or `--background` to start in tray-only mode.
@@ -51,6 +53,7 @@ Quicker actions and scripts can query the current titles without starting the UI
 ```powershell
 WidgetCanvas.exe --list-widgets --output "%TEMP%\WidgetCanvas-widgets.json"
 WidgetCanvas.exe --widget "Widget title"
+WidgetCanvas.exe --canvas "Work"
 WidgetCanvas.exe --file "D:\Widgets\clock.html"
 WidgetCanvas.exe --settings
 WidgetCanvas.exe --exit
@@ -83,7 +86,7 @@ Machine-local state is kept out of Documents sync. When WebDAV is enabled, only 
 
 Writes are debounced and atomic. The previous readable file is kept as a `.bak` backup.
 
-Application settings are stored in `%LocalAppData%\浮岛\Settings\settings.json`. Automatic updates are downloaded only from this repository's GitHub Releases and verified with the published SHA-256 checksum before installation.
+Application settings are stored in `%LocalAppData%\浮岛\Settings\settings.json`. Automatic updates prefer Gitee Releases by default and fall back to GitHub; the preferred channel can be changed in Management Center. Both channels publish the same artifacts, which are verified against the published SHA-256 checksum before installation.
 
 ## Widget host API
 

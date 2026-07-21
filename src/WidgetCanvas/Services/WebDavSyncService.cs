@@ -190,7 +190,9 @@ namespace WidgetCanvas.Services
                         HtmlWidgetCanvasStore.Save(
                             contentFilePath,
                             runtimeFilePath,
-                            merge.Widgets);
+                            merge.Widgets,
+                            localLoad.Canvases,
+                            localLoad.ActiveCanvasId);
                     }
                     SaveDocument(baseFilePath, mergedDocument);
 
@@ -605,6 +607,7 @@ namespace WidgetCanvas.Services
             Width = source.Width,
             Height = source.Height,
             IsLocked = source.IsLocked,
+            CanvasId = source.CanvasId,
             Home = source.Home,
             DetachedPosition = source.DetachedPosition,
             DetachedWidth = source.DetachedWidth,

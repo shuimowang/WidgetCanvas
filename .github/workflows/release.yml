@@ -12,6 +12,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
@@ -28,6 +30,18 @@ jobs:
           Copy-Item artifacts/WidgetCanvas/WidgetCanvas.exe artifacts/WidgetCanvas-win-x64.exe
           $hash = (Get-FileHash artifacts/WidgetCanvas-win-x64.exe -Algorithm SHA256).Hash
           "$hash  WidgetCanvas-win-x64.exe" | Set-Content artifacts/WidgetCanvas-win-x64.exe.sha256 -Encoding ascii
+      - name: Publish source and release to Gitee
+        shell: pwsh
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GITEE_TOKEN)) {
+            throw "Repository secret GITEE_TOKEN is required for dual publishing."
+          }
+          ./.github/scripts/publish-gitee.ps1 `
+            -Token $env:GITEE_TOKEN `
+            -Tag "${{ github.ref_name }}" `
+            -ArtifactsDirectory "artifacts"
       - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true

@@ -30,3 +30,5 @@ dotnet run --project src\WidgetCanvas\WidgetCanvas.csproj
 Example widgets should be complete single-file HTML documents without CDN, npm, external font, script, or image dependencies. Use inline SVG or CSS for icons. A useful example must handle loading, empty, and error states and must not contain API keys or private data.
 
 By contributing, you agree that your contribution is licensed under the MIT License.
+
+Maintainers should read [双端发布说明](docs/release.zh-CN.md) before pushing a version tag.

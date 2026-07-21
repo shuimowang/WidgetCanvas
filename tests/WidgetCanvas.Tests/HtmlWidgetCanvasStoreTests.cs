@@ -85,6 +85,32 @@ public sealed class HtmlWidgetCanvasStoreTests : IDisposable
         Assert.Equal("<!doctype html><title>第一版</title>", Assert.Single(result.Widgets).Html);
     }
 
+    [Fact]
+    public void NamedCanvasesAndActiveCanvasRoundTripInRuntimeData()
+    {
+        string contentPath = Path.Combine(_directory, "widgets.json");
+        string runtimePath = Path.Combine(_directory, "canvas.json");
+        var widget = new HtmlWidgetDefinition
+        {
+            Id = "clock",
+            Html = "<!doctype html><title>时钟</title>",
+            CanvasId = "work"
+        };
+        HtmlWidgetCanvasDefinition[] canvases =
+        [
+            new() { Id = "default", Name = "默认画布" },
+            new() { Id = "work", Name = "工作" }
+        ];
+
+        HtmlWidgetCanvasStore.Save(contentPath, runtimePath, [widget], canvases, "work");
+        HtmlWidgetCanvasLoadResult result = HtmlWidgetCanvasStore.Load(contentPath, runtimePath);
+
+        Assert.Equal("work", result.ActiveCanvasId);
+        Assert.Equal(["默认画布", "工作"], result.Canvases.Select(canvas => canvas.Name));
+        Assert.Equal("work", Assert.Single(result.Widgets).CanvasId);
+        Assert.DoesNotContain("CanvasId", File.ReadAllText(contentPath), StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))

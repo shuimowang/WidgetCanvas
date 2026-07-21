@@ -39,6 +39,8 @@ namespace WidgetCanvas.Windows
             _initializing = true;
             VersionText.Text = "版本 " + UpdateService.CurrentVersion.ToString(3) + " · Windows x64";
             AutoUpdateToggle.IsChecked = _app.Settings.AutoUpdateEnabled;
+            GiteeUpdateRadio.IsChecked = _app.Settings.UpdateChannel == UpdateChannel.Gitee;
+            GitHubUpdateRadio.IsChecked = _app.Settings.UpdateChannel == UpdateChannel.GitHub;
             StartupToggle.IsChecked = StartupService.IsEnabled();
             HotkeyToggle.IsChecked = _app.Settings.HotkeyEnabled;
             HotkeyTextBox.Text = _app.Settings.Hotkey;
@@ -97,6 +99,16 @@ namespace WidgetCanvas.Windows
             if (_initializing)
                 return;
             _app.Settings.AutoUpdateEnabled = AutoUpdateToggle.IsChecked == true;
+            _app.SaveSettings();
+        }
+
+        private void UpdateChannelRadio_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializing || GiteeUpdateRadio == null)
+                return;
+            _app.Settings.UpdateChannel = GiteeUpdateRadio.IsChecked == true
+                ? UpdateChannel.Gitee
+                : UpdateChannel.GitHub;
             _app.SaveSettings();
         }
 
@@ -170,7 +182,8 @@ namespace WidgetCanvas.Windows
         private async void CheckUpdateButton_Click(object sender, RoutedEventArgs e)
         {
             CheckUpdateButton.IsEnabled = false;
-            UpdateStatusText.Text = "正在连接 GitHub…";
+            UpdateStatusText.Text = "正在连接 " +
+                UpdateService.GetChannelName(_app.Settings.UpdateChannel) + "…";
             try
             {
                 UpdateStatusText.Text = await _app.CheckForUpdatesAsync(this);
@@ -257,6 +270,8 @@ namespace WidgetCanvas.Windows
         }
 
         private void ProjectButton_Click(object sender, RoutedEventArgs e) => OpenUrl(UpdateService.ProjectUrl);
+
+        private void GiteeProjectButton_Click(object sender, RoutedEventArgs e) => OpenUrl(UpdateService.GiteeProjectUrl);
 
         private void ReleasesButton_Click(object sender, RoutedEventArgs e) => OpenUrl(UpdateService.ReleasesUrl);
 

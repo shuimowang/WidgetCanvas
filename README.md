@@ -14,13 +14,13 @@ WidgetCanvas 是一个面向 AI 创作的 Windows 桌面小组件画布。你只
 - **AI 优先：**复制内置提示词、补充需求、粘贴 HTML，即可完成组件。
 - **不发明组件语法：**组件就是普通 HTML、CSS 和 JavaScript，源码始终可查看。
 - **真正的桌面能力：**支持状态、剪贴板、HTTP、只读文件、用户目录和参数化进程调用。
-- **放置自由：**拖动、缩放、锁定、搜索、收进组件库，也能弹成独立窗口。
+- **放置自由：**创建多个命名画布，拖动、缩放、锁定、搜索、收进组件库，也能弹成独立窗口。
 - **适合长期运行：**隐藏浮岛不会销毁仍在使用的组件。
 - **本地优先：**默认完全保存在本机，也可选择通过自己的 WebDAV 多设备同步。
 
 ## 快速开始
 
-1. 从 [Releases](https://github.com/shuimowang/WidgetCanvas/releases) 下载 `WidgetCanvas-win-x64.zip`。
+1. 从 [Gitee Releases](https://gitee.com/shuimowang/WidgetCanvas/releases) 或 [GitHub Releases](https://github.com/shuimowang/WidgetCanvas/releases) 下载 `WidgetCanvas-win-x64.zip`。
 2. 解压并运行 `WidgetCanvas.exe`。
 3. 点击底部“复制 AI 提示词”，发送给任意 AI，并追加组件需求。
 4. 复制 AI 返回的完整 HTML。
@@ -39,6 +39,8 @@ WidgetCanvas 是一个面向 AI 创作的 Windows 桌面小组件画布。你只
 - 从托盘打开“管理中心”：配置自动更新、WebDAV 同步、登录后驻留托盘和显示画布的全局快捷键。
 - 组件右键：编辑、重新加载、锁定、弹出、收进组件库、复制或永久删除。
 - 按住 `Ctrl` 拖动组件手柄：弹出为独立组件窗口。
+- 点击底部当前画布名称：切换、新建、重命名或删除画布；组件库在所有画布之间共享。
+- `WidgetCanvas.exe --canvas "工作"`：按名称直接切换并显示画布。
 - `WidgetCanvas.exe --widget "组件标题"`：按 HTML `<title>` 直接打开某个组件。
 - `WidgetCanvas.exe --file "D:\Widgets\clock.html"`：把 HTML 文件临时加载为独立组件窗口，不加入组件库。
 - `WidgetCanvas.exe --settings`：直接打开管理中心；`--background`：只在托盘驻留。
@@ -51,6 +53,7 @@ Quicker 动作或脚本无需启动界面即可读取当前组件标题：
 ```powershell
 WidgetCanvas.exe --list-widgets --output "%TEMP%\WidgetCanvas-widgets.json"
 WidgetCanvas.exe --widget "组件标题"
+WidgetCanvas.exe --canvas "工作"
 WidgetCanvas.exe --file "D:\Widgets\clock.html"
 WidgetCanvas.exe --settings
 WidgetCanvas.exe --exit
@@ -83,7 +86,7 @@ Documents\浮岛\组件\widgets.json
 
 宿主统一对状态写入做防抖，并采用临时文件、落盘刷新和原子替换；上一份可读数据保留为 `.bak`。
 
-应用设置保存在 `%LocalAppData%\浮岛\Settings\settings.json`。自动更新只从本项目的 GitHub Releases 下载，并在安装前核对发布时生成的 SHA-256 校验值。
+应用设置保存在 `%LocalAppData%\浮岛\Settings\settings.json`。自动更新默认优先使用 Gitee Releases，连接失败会自动回退 GitHub；也可在管理中心更改首选渠道。两个渠道使用同一份构建产物，并在安装前核对发布时生成的 SHA-256 校验值。
 
 ## 组件接口
 

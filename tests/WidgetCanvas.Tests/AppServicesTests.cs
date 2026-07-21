@@ -80,6 +80,25 @@ public sealed class AppServicesTests : IDisposable
         Assert.Equal(
             "https://github.com/shuimowang/WidgetCanvas/releases/download/v1.4.2/WidgetCanvas-win-x64.exe.sha256",
             result.ChecksumUrl);
+        Assert.Equal(UpdateChannel.GitHub, result.Channel);
+    }
+
+    [Fact]
+    public void GiteeAssetParserFindsUploadedReleaseFiles()
+    {
+        using JsonDocument document = JsonDocument.Parse("""
+            {"assets":[
+              {"name":"WidgetCanvas-win-x64.exe","browser_download_url":"https://gitee.com/download/app.exe"},
+              {"name":"WidgetCanvas-win-x64.exe.sha256","browser_download_url":"https://gitee.com/download/app.sha256"}
+            ]}
+            """);
+
+        Assert.Equal(
+            "https://gitee.com/download/app.exe",
+            UpdateService.FindAssetUrl(document.RootElement, "WidgetCanvas-win-x64.exe"));
+        Assert.Equal(
+            "https://gitee.com/download/app.sha256",
+            UpdateService.FindAssetUrl(document.RootElement, "WidgetCanvas-win-x64.exe.sha256"));
     }
 
     [Theory]
