@@ -11,9 +11,9 @@ $apiRoot = "https://gitee.com/api/v5/repos/$owner/$repo"
 $headers = @{ 'User-Agent' = 'WidgetCanvas-release' }
 $escapedToken = [Uri]::EscapeDataString($Token)
 $artifactNames = @(
-    'WidgetCanvas-win-x64.zip',
+    'WidgetCanvas-win-x64.exe.sha256',
     'WidgetCanvas-win-x64.exe',
-    'WidgetCanvas-win-x64.exe.sha256'
+    'WidgetCanvas-win-x64.zip'
 )
 
 foreach ($name in $artifactNames) {
@@ -75,8 +75,24 @@ foreach ($asset in $existing) {
 
 foreach ($name in $artifactNames) {
     $file = Get-Item -LiteralPath (Join-Path $ArtifactsDirectory $name)
-    Invoke-RestMethod -Method Post -Uri "$apiRoot/releases/$($release.id)/attach_files" `
-        -Headers $headers -Form @{ access_token = $Token; file = $file } | Out-Null
+    $uploadUrl = "$apiRoot/releases/$($release.id)/attach_files"
+    $curlArguments = @(
+        '--fail-with-body',
+        '--silent',
+        '--show-error',
+        '--retry', '3',
+        '--retry-delay', '5',
+        '--connect-timeout', '30',
+        '--max-time', '1800',
+        '--form', "access_token=$Token",
+        '--form', "file=@$($file.FullName)",
+        $uploadUrl
+    )
+    & curl.exe @curlArguments | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to upload Gitee release asset: $name"
+    }
+    Write-Host "Uploaded Gitee release asset: $name"
 }
 
 # The repository attachment quota is finite. Keep binaries for the newest four
