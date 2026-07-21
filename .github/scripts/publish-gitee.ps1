@@ -33,6 +33,7 @@ git -c "http.extraHeader=Authorization: Basic $basic" push `
 if ($LASTEXITCODE -ne 0) { throw 'Failed to mirror main and tag to Gitee.' }
 
 $encodedTag = [Uri]::EscapeDataString($Tag)
+$release = $null
 try {
     $release = Invoke-RestMethod `
         -Uri "$apiRoot/releases/tags/$encodedTag`?access_token=$escapedToken" `
@@ -40,6 +41,8 @@ try {
 }
 catch {
     if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
+}
+if (-not $release -or -not $release.id) {
     $previousTag = git describe --tags --abbrev=0 "$Tag^" 2>$null
     $logRange = if ($LASTEXITCODE -eq 0 -and $previousTag) { "$previousTag..$Tag" } else { $Tag }
     $changes = git log $logRange --pretty='- %s' --no-merges
