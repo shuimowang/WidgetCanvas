@@ -15,20 +15,46 @@ public sealed class WebDavSyncTests : IDisposable
         Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public void ConnectionOptionsUseAnExistingDirectoryAndFixedRemoteFile()
+    public void ConnectionOptionsUseAManagedDirectoryAndFixedRemoteFile()
     {
         WebDavConnectionOptions options = WebDavSyncService.CreateOptions(
             "https://dav.example.test/user/widgets",
             " alice ",
             "secret");
 
-        Assert.Equal("https://dav.example.test/user/widgets/", options.DirectoryUri.AbsoluteUri);
+        Assert.Equal("https://dav.example.test/user/widgets/", options.ParentDirectoryUri.AbsoluteUri);
+        Assert.Equal("https://dav.example.test/user/widgets/WidgetCanvas/", options.DirectoryUri.AbsoluteUri);
         Assert.Equal(
-            "https://dav.example.test/user/widgets/widgetcanvas-sync-v1.json",
+            "https://dav.example.test/user/widgets/WidgetCanvas/widgetcanvas-sync-v1.json",
             options.FileUri.AbsoluteUri);
         Assert.Equal("alice", options.Username);
+        WebDavConnectionOptions alreadyManaged = WebDavSyncService.CreateOptions(
+            "https://dav.example.test/user/widgets/WidgetCanvas/",
+            "",
+            "");
+        Assert.Equal(
+            "https://dav.example.test/user/widgets/WidgetCanvas/",
+            alreadyManaged.DirectoryUri.AbsoluteUri);
         Assert.Throws<ArgumentException>(() =>
             WebDavSyncService.CreateOptions("ftp://example.test/data", "", ""));
+    }
+
+    [Fact]
+    public async Task TestConnectionCreatesManagedDirectoryWhenItDoesNotExist()
+    {
+        var handler = new DirectoryCreatingWebDavHandler();
+        using var service = new WebDavSyncService(handler);
+        WebDavConnectionOptions options = WebDavSyncService.CreateOptions(
+            "https://dav.example.test/dav/",
+            "user",
+            "password");
+
+        await service.TestConnectionAsync(options);
+
+        Assert.True(handler.DirectoryCreated);
+        Assert.Equal(
+            "https://dav.example.test/dav/WidgetCanvas",
+            handler.CreatedDirectoryUri?.AbsoluteUri);
     }
 
     [Fact]
@@ -208,6 +234,37 @@ public sealed class WebDavSyncTests : IDisposable
                 };
             }
             return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
+        }
+    }
+
+    private sealed class DirectoryCreatingWebDavHandler : HttpMessageHandler
+    {
+        public bool DirectoryCreated { get; private set; }
+
+        public Uri? CreatedDirectoryUri { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            if (request.Method.Method == "PROPFIND")
+            {
+                bool isManagedDirectory = path.TrimEnd('/').EndsWith(
+                    "/WidgetCanvas",
+                    StringComparison.Ordinal);
+                HttpStatusCode status = isManagedDirectory && !DirectoryCreated
+                    ? HttpStatusCode.NotFound
+                    : (HttpStatusCode)207;
+                return Task.FromResult(new HttpResponseMessage(status));
+            }
+            if (request.Method.Method == "MKCOL")
+            {
+                DirectoryCreated = true;
+                CreatedDirectoryUri = request.RequestUri;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created));
+            }
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.MethodNotAllowed));
         }
     }
 }

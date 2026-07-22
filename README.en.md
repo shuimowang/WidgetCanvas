@@ -36,7 +36,7 @@ Windows 10/11 x64 is supported. WidgetCanvas is self-contained and does not requ
 - Use the top-right `×` to actually exit and release WebView2 resources.
 - Double-click the tray icon or run `WidgetCanvas.exe` again to reopen the canvas.
 - Right-click the tray icon to open the canvas or component library, or launch any widget directly in its own window.
-- Open **Management Center** from the tray to configure automatic updates, WebDAV sync, launch to the tray at sign-in, and a global canvas hotkey.
+- Open **Management Center** from the tray to configure automatic updates, WebDAV sync, launch to the tray at sign-in, and a global canvas hotkey that can always open the first main canvas.
 - Right-click a widget to edit, reload, lock, detach, archive, duplicate, or delete it.
 - Hold `Ctrl` while dragging a widget handle to detach it into a standalone window.
 - Click the current canvas name in the bottom dock to switch, create, rename, or delete canvases. The library is shared globally.

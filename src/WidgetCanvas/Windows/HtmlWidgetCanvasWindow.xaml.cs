@@ -269,6 +269,19 @@ namespace WidgetCanvas.Windows
         }
 
         /// <summary>
+        /// 切换到画布列表中的第一个画布并显示窗口。第一个画布是主画布。
+        /// </summary>
+        public static HtmlWidgetCanvasWindow ShowMainCanvasWindow(bool activate = true)
+        {
+            return InvokeOnUiThread(() =>
+            {
+                HtmlWidgetCanvasWindow window = _instance ??= new HtmlWidgetCanvasWindow();
+                window.SwitchCanvas(window._canvases[0].Id, showToast: false);
+                return ShowWindow(activate: activate);
+            });
+        }
+
+        /// <summary>
         /// 显示进程内唯一的浮岛窗口，并直接进入组件库。
         /// </summary>
         public static HtmlWidgetCanvasWindow ShowLibraryWindow(bool activate = true)

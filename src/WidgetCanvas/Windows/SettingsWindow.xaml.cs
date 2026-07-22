@@ -44,6 +44,7 @@ namespace WidgetCanvas.Windows
             StartupToggle.IsChecked = StartupService.IsEnabled();
             HotkeyToggle.IsChecked = _app.Settings.HotkeyEnabled;
             HotkeyTextBox.Text = _app.Settings.Hotkey;
+            HotkeyShowMainCanvasToggle.IsChecked = _app.Settings.HotkeyShowsMainCanvas;
             WebDavAutoSyncToggle.IsChecked = _app.Settings.WebDavAutoSyncEnabled;
             WebDavUrlTextBox.Text = _app.Settings.WebDavUrl;
             WebDavUsernameTextBox.Text = _app.Settings.WebDavUsername;
@@ -155,6 +156,14 @@ namespace WidgetCanvas.Windows
         private void ApplyHotkeyButton_Click(object sender, RoutedEventArgs e) =>
             ApplyHotkey(HotkeyToggle.IsChecked == true);
 
+        private void HotkeyShowMainCanvasToggle_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializing)
+                return;
+            _app.Settings.HotkeyShowsMainCanvas = HotkeyShowMainCanvasToggle.IsChecked == true;
+            _app.SaveSettings();
+        }
+
         private void ApplyHotkey(bool enabled)
         {
             string previousGesture = _app.Settings.Hotkey;
@@ -209,7 +218,7 @@ namespace WidgetCanvas.Windows
                     WebDavUrlTextBox.Text,
                     WebDavUsernameTextBox.Text,
                     WebDavPasswordBox.Password);
-                WebDavStatusText.Text = "连接成功 · 目录可访问";
+                WebDavStatusText.Text = "连接成功 · 同步目录已就绪";
             }
             catch (Exception ex)
             {

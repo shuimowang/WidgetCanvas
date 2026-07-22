@@ -73,7 +73,7 @@ namespace WidgetCanvas
             _settingsService = new AppSettingsService(AppPaths.SettingsFilePath);
             _updateService = new UpdateService();
             _webDavSyncService = new WebDavSyncService();
-            _hotkeyService = new GlobalHotkeyService(ShowCanvas);
+            _hotkeyService = new GlobalHotkeyService(ShowCanvasFromHotkey);
             if (Settings.StartWithWindows)
             {
                 try
@@ -259,6 +259,19 @@ namespace WidgetCanvas
         private void ShowCanvas()
         {
             HtmlWidgetCanvasWindow canvas = HtmlWidgetCanvasWindow.ShowWindow(activate: true);
+            TrackMainWindow(canvas);
+        }
+
+        private void ShowCanvasFromHotkey()
+        {
+            HtmlWidgetCanvasWindow canvas = Settings.HotkeyShowsMainCanvas
+                ? HtmlWidgetCanvasWindow.ShowMainCanvasWindow(activate: true)
+                : HtmlWidgetCanvasWindow.ShowWindow(activate: true);
+            TrackMainWindow(canvas);
+        }
+
+        private void TrackMainWindow(HtmlWidgetCanvasWindow canvas)
+        {
             if (MainWindow == null)
                 MainWindow = canvas;
             canvas.Closed -= Canvas_Closed;

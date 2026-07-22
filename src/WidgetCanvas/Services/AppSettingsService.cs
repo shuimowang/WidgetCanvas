@@ -19,6 +19,8 @@ namespace WidgetCanvas.Services
 
         public string Hotkey { get; set; } = "Ctrl+Alt+W";
 
+        public bool HotkeyShowsMainCanvas { get; set; }
+
         public DateTimeOffset? LastUpdateCheckUtc { get; set; }
 
         public bool WebDavAutoSyncEnabled { get; set; }

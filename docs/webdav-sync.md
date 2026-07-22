@@ -4,19 +4,18 @@ WidgetCanvas can synchronize widgets through a user-provided WebDAV directory. T
 
 ## Setup
 
-1. Create a dedicated directory such as `WidgetCanvas` on the WebDAV service.
-2. Open **Management Center** from the tray icon.
-3. Enter the complete directory URL, username, and password. HTTPS and an app-specific password are recommended.
-4. Use **Test connection**, then select **Sync now**.
-5. Enable automatic sync and save if continuous synchronization is desired.
+1. Open **Management Center** from the tray icon.
+2. Enter a WebDAV service URL or parent directory plus the credentials. HTTPS and an app-specific password are recommended.
+3. Select **Test connection**. WidgetCanvas creates and uses a dedicated `WidgetCanvas` directory below the entered URL. If the URL already ends in `WidgetCanvas`, that directory is used directly.
+4. Select **Sync now**. Enable automatic sync and save if continuous synchronization is desired.
 
-The URL must point to an existing HTTP or HTTPS WebDAV directory. WidgetCanvas maintains one file inside it:
+The URL must point to an existing HTTP or HTTPS WebDAV directory. WidgetCanvas maintains one file inside its managed directory:
 
 ```text
 widgetcanvas-sync-v1.json
 ```
 
-The server must support WebDAV `PROPFIND` plus `GET` and `PUT` for the sync file. Username/password authentication currently uses HTTP Basic Authentication, so HTTPS should be preferred.
+The server must support WebDAV `PROPFIND`, `MKCOL`, plus `GET` and `PUT` for the sync file. Username/password authentication currently uses HTTP Basic Authentication, so HTTPS should be preferred.
 
 ## What is synchronized
 

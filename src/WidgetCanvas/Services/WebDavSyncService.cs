@@ -17,6 +17,7 @@ using WidgetCanvas.HtmlWidgets;
 namespace WidgetCanvas.Services
 {
     internal sealed record WebDavConnectionOptions(
+        Uri ParentDirectoryUri,
         Uri DirectoryUri,
         Uri FileUri,
         string Username,
@@ -61,6 +62,7 @@ namespace WidgetCanvas.Services
     internal sealed class WebDavSyncService : IDisposable
     {
         internal const string RemoteFileName = "widgetcanvas-sync-v1.json";
+        internal const string RemoteDirectoryName = "WidgetCanvas";
         private const int MaximumRemoteBytes = 64 * 1024 * 1024;
         private const int MaximumWidgetCount = 10_000;
         private const int MaximumWidgetHtmlBytes = 2 * 1024 * 1024;
@@ -111,10 +113,22 @@ namespace WidgetCanvas.Services
             string directoryText = directory.AbsoluteUri.EndsWith("/", StringComparison.Ordinal)
                 ? directory.AbsoluteUri
                 : directory.AbsoluteUri + "/";
-            directory = new Uri(directoryText, UriKind.Absolute);
+            Uri configuredDirectory = new(directoryText, UriKind.Absolute);
+            string lastSegment = Uri.UnescapeDataString(
+                configuredDirectory.Segments[^1].TrimEnd('/'));
+            bool pointsToManagedDirectory = lastSegment.Equals(
+                RemoteDirectoryName,
+                StringComparison.OrdinalIgnoreCase);
+            Uri parentDirectory = pointsToManagedDirectory
+                ? new Uri(configuredDirectory, "../")
+                : configuredDirectory;
+            Uri syncDirectory = pointsToManagedDirectory
+                ? configuredDirectory
+                : new Uri(configuredDirectory, RemoteDirectoryName + "/");
             return new WebDavConnectionOptions(
-                directory,
-                new Uri(directory, RemoteFileName),
+                parentDirectory,
+                syncDirectory,
+                new Uri(syncDirectory, RemoteFileName),
                 username?.Trim() ?? string.Empty,
                 password ?? string.Empty);
         }
@@ -124,16 +138,8 @@ namespace WidgetCanvas.Services
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(options);
-            using HttpRequestMessage request = CreateRequest(PropFindMethod, options.DirectoryUri, options);
-            request.Headers.TryAddWithoutValidation("Depth", "0");
-            request.Content = new StringContent(
-                "<?xml version=\"1.0\" encoding=\"utf-8\"?><propfind xmlns=\"DAV:\"><prop><resourcetype/></prop></propfind>",
-                Encoding.UTF8,
-                "application/xml");
-            using HttpResponseMessage response = await SendAsync(request, cancellationToken);
-            if (response.IsSuccessStatusCode)
-                return;
-            throw CreateWebDavException(response.StatusCode, testingDirectory: true);
+            await RequireDirectoryAsync(options.ParentDirectoryUri, options, cancellationToken);
+            await EnsureSyncDirectoryAsync(options, cancellationToken);
         }
 
         public async Task<WebDavSyncResult> SynchronizeAsync(
@@ -149,6 +155,7 @@ namespace WidgetCanvas.Services
             await _syncGate.WaitAsync(cancellationToken);
             try
             {
+                await EnsureSyncDirectoryAsync(options, cancellationToken);
                 HtmlWidgetCanvasLoadResult localLoad = HtmlWidgetCanvasStore.Load(
                     contentFilePath,
                     runtimeFilePath);
@@ -257,6 +264,69 @@ namespace WidgetCanvas.Services
             }
             ValidateDocument(document);
             return new RemoteDocument(document, response.Headers.ETag?.ToString());
+        }
+
+        private async Task EnsureSyncDirectoryAsync(
+            WebDavConnectionOptions options,
+            CancellationToken cancellationToken)
+        {
+            HttpStatusCode status = await ProbeDirectoryAsync(
+                options.DirectoryUri,
+                options,
+                cancellationToken);
+            if ((int)status is >= 200 and <= 299)
+                return;
+            if (status != HttpStatusCode.NotFound)
+                throw CreateWebDavException(status, testingDirectory: true);
+
+            await RequireDirectoryAsync(options.ParentDirectoryUri, options, cancellationToken);
+            Uri creationUri = new(options.DirectoryUri.AbsoluteUri.TrimEnd('/'), UriKind.Absolute);
+            using HttpRequestMessage request = CreateRequest(
+                new HttpMethod("MKCOL"),
+                creationUri,
+                options);
+            request.Content = new ByteArrayContent([]);
+            using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+                return;
+
+            // 另一台设备可能刚好已经创建了目录；部分服务此时返回 405。
+            if (response.StatusCode == HttpStatusCode.MethodNotAllowed)
+            {
+                status = await ProbeDirectoryAsync(options.DirectoryUri, options, cancellationToken);
+                if ((int)status is >= 200 and <= 299)
+                    return;
+            }
+
+            throw response.StatusCode == HttpStatusCode.Conflict
+                ? new InvalidOperationException("无法创建 WidgetCanvas WebDAV 同步目录，请确认上级目录存在且允许创建文件夹。")
+                : CreateWebDavException(response.StatusCode, testingDirectory: true);
+        }
+
+        private async Task RequireDirectoryAsync(
+            Uri directoryUri,
+            WebDavConnectionOptions options,
+            CancellationToken cancellationToken)
+        {
+            HttpStatusCode status = await ProbeDirectoryAsync(directoryUri, options, cancellationToken);
+            if ((int)status is >= 200 and <= 299)
+                return;
+            throw CreateWebDavException(status, testingDirectory: true);
+        }
+
+        private async Task<HttpStatusCode> ProbeDirectoryAsync(
+            Uri directoryUri,
+            WebDavConnectionOptions options,
+            CancellationToken cancellationToken)
+        {
+            using HttpRequestMessage request = CreateRequest(PropFindMethod, directoryUri, options);
+            request.Headers.TryAddWithoutValidation("Depth", "0");
+            request.Content = new StringContent(
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?><propfind xmlns=\"DAV:\"><prop><resourcetype/></prop></propfind>",
+                Encoding.UTF8,
+                "application/xml");
+            using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+            return response.StatusCode;
         }
 
         private async Task UploadAsync(
