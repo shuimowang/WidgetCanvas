@@ -3,6 +3,17 @@ name: release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to publish
+        required: true
+        type: string
+      publish_gitee:
+        description: Also publish release assets to Gitee
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -14,6 +25,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
@@ -30,22 +42,25 @@ jobs:
           Copy-Item artifacts/WidgetCanvas/WidgetCanvas.exe artifacts/WidgetCanvas-win-x64.exe
           $hash = (Get-FileHash artifacts/WidgetCanvas-win-x64.exe -Algorithm SHA256).Hash
           "$hash  WidgetCanvas-win-x64.exe" | Set-Content artifacts/WidgetCanvas-win-x64.exe.sha256 -Encoding ascii
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          files: |
+            artifacts/WidgetCanvas-win-x64.zip
+            artifacts/WidgetCanvas-win-x64.exe
+            artifacts/WidgetCanvas-win-x64.exe.sha256
       - name: Publish source and release to Gitee
+        if: ${{ github.event_name == 'push' || inputs.publish_gitee }}
         shell: pwsh
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:GITEE_TOKEN)) {
             throw "Repository secret GITEE_TOKEN is required for dual publishing."
           }
           ./.github/scripts/publish-gitee.ps1 `
             -Token $env:GITEE_TOKEN `
-            -Tag "${{ github.ref_name }}" `
+            -Tag $env:RELEASE_TAG `
             -ArtifactsDirectory "artifacts"
-      - uses: softprops/action-gh-release@v3
-        with:
-          generate_release_notes: true
-          files: |
-            artifacts/WidgetCanvas-win-x64.zip
-            artifacts/WidgetCanvas-win-x64.exe
-            artifacts/WidgetCanvas-win-x64.exe.sha256
