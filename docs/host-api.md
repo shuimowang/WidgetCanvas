@@ -14,7 +14,7 @@ Do not access `chrome.webview`, post raw messages, use `window.open`, or invent 
 
 ## State
 
-State is isolated per widget instance and stored as native JSON values.
+State is isolated per widget instance and stored as native JSON values. Keys are limited to 256 characters. Each widget may store up to 2,048 entries and 4 MiB of state data in total.
 
 | Method | Result | Notes |
 |---|---|---|

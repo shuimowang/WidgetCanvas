@@ -838,20 +838,19 @@ namespace WidgetCanvas.Windows
             MarkDirty();
             SaveNow();
 
-            if (action is HtmlWidgetWindow.DetachedCloseAction.Canvas or
-                HtmlWidgetWindow.DetachedCloseAction.Edit)
+            // 标题栏 ×、系统关闭和“放回浮岛”都应静默收回组件，
+            // 不能因为关闭一个小窗口而突然弹出全屏画布。只有用户明确
+            // 选择“编辑组件”时，才显示宿主并进入编辑器。
+            if (action == HtmlWidgetWindow.DetachedCloseAction.Edit)
             {
                 HtmlWidgetCanvasWindow canvas = ShowWindow(activate: true);
                 if (canvas.WidgetLibraryLayer.Visibility == Visibility.Visible)
-                    canvas.HideWidgetLibrary(restoreCanvas: action == HtmlWidgetWindow.DetachedCloseAction.Canvas);
-                if (action == HtmlWidgetWindow.DetachedCloseAction.Edit)
-                {
-                    canvas.ShowWidgetEditor(
-                        widget,
-                        returnToDetached: true,
-                        detachedOwner: window.Owner,
-                        detachedReturnTarget: window.ReturnTarget);
-                }
+                    canvas.HideWidgetLibrary(restoreCanvas: false);
+                canvas.ShowWidgetEditor(
+                    widget,
+                    returnToDetached: true,
+                    detachedOwner: window.Owner,
+                    detachedReturnTarget: window.ReturnTarget);
             }
         }
 
@@ -2617,7 +2616,7 @@ namespace WidgetCanvas.Windows
                     ShowLibraryPreviewFatalError(
                         runtime,
                         "预览进程异常：" + args.ProcessFailedKind);
-                await core.AddScriptToExecuteOnDocumentCreatedAsync(WidgetHostBridgeScript);
+                await core.AddScriptToExecuteOnDocumentCreatedAsync(HtmlWidgetHostBridge.Script);
                 if (IsCurrentLibraryPreview(runtime))
                     core.NavigateToString(widget.Html);
             }
@@ -3313,7 +3312,7 @@ namespace WidgetCanvas.Windows
                 core.ProcessFailed += (_, args) =>
                     ShowFatalWidgetError(runtime, "浏览器进程异常：" + args.ProcessFailedKind);
                 stage = "注入宿主脚本";
-                await core.AddScriptToExecuteOnDocumentCreatedAsync(WidgetHostBridgeScript);
+                await core.AddScriptToExecuteOnDocumentCreatedAsync(HtmlWidgetHostBridge.Script);
                 stage = "加载组件 HTML";
                 core.NavigateToString(runtime.Definition.Html);
             }
@@ -3502,7 +3501,7 @@ namespace WidgetCanvas.Windows
                     {
                         throw new ArgumentException("state.write 缺少参数：value");
                     }
-                    widget.State[key] = value.Clone();
+                    HtmlWidgetState.Set(widget.State, key, value);
                     MarkDirty();
                     return true;
                 }
@@ -4772,90 +4771,6 @@ namespace WidgetCanvas.Windows
                 }
             }
         }
-
-        internal const string WidgetHostBridgeScript = """
-            (() => {
-              if (window.widgetHost?.state?.read) return;
-              const pending = new Map();
-              let sequence = 0;
-              chrome.webview.addEventListener('message', event => {
-                const message = event.data;
-                if (!message || message.type !== 'widgetHostReply') return;
-                const request = pending.get(message.id);
-                if (!request) return;
-                pending.delete(message.id);
-                if (message.ok) request.resolve(message.result);
-                else request.reject(new Error(message.error || '宿主调用失败'));
-              });
-              const invoke = (method, args = {}) => new Promise((resolve, reject) => {
-                const id = `${Date.now()}-${++sequence}`;
-                pending.set(id, { resolve, reject });
-                try {
-                  chrome.webview.postMessage({ id, method, args });
-                } catch (error) {
-                  pending.delete(id);
-                  reject(error);
-                }
-              });
-              window.widgetHost = {
-                state: {
-                  read: (key, defaultValue = null) => invoke('state.read', { key, defaultValue }),
-                  write: (key, value) => invoke('state.write', { key, value }),
-                  remove: key => invoke('state.remove', { key }),
-                  clear: () => invoke('state.clear'),
-                  flush: () => invoke('state.flush')
-                },
-                clipboard: {
-                  read: () => invoke('clipboard.read'),
-                  write: text => invoke('clipboard.write', { text })
-                },
-                url: {
-                  open: (args = {}) => invoke('url.open', args)
-                },
-                path: {
-                  open: (args = {}) => invoke('path.open', args)
-                },
-                window: {
-                  hide: () => invoke('window.hide')
-                },
-                http: {
-                  get: (args = {}) => invoke('http.get', args),
-                  post: (args = {}) => invoke('http.post', args),
-                  request: (args = {}) => invoke('http.request', args)
-                },
-                fs: {
-                  getKnownFolders: () => invoke('fs.getKnownFolders'),
-                  exists: (args = {}) => invoke('fs.exists', args),
-                  getInfo: (args = {}) => invoke('fs.getInfo', args),
-                  readText: (args = {}) => invoke('fs.readText', args),
-                  readBase64: (args = {}) => invoke('fs.readBase64', args),
-                  list: (args = {}) => invoke('fs.list', args),
-                  selectFile: (args = {}) => invoke('fs.selectFile', args),
-                  selectFolder: (args = {}) => invoke('fs.selectFolder', args)
-                },
-                process: {
-                  start: (args = {}) => invoke('process.start', args),
-                  run: (args = {}) => invoke('process.run', args)
-                }
-              };
-              const reportRuntimeError = (message, stack = '') =>
-                chrome.webview.postMessage({
-                  type: 'runtimeError',
-                  message: String(message || '未知脚本错误'),
-                  stack: String(stack || '')
-                });
-              window.addEventListener('error', event =>
-                reportRuntimeError(event.message, event.error?.stack || ''), true);
-              window.addEventListener('unhandledrejection', event => {
-                const reason = event.reason;
-                reportRuntimeError(reason?.message || reason || '未处理的异步错误', reason?.stack || '');
-              }, true);
-              document.addEventListener('compositionstart', () =>
-                chrome.webview.postMessage({ type: 'compositionState', active: true }), true);
-              document.addEventListener('compositionend', () =>
-                chrome.webview.postMessage({ type: 'compositionState', active: false }), true);
-            })();
-            """;
 
         [DllImport("user32.dll")]
         private static extern void keybd_event(

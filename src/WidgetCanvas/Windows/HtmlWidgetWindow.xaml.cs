@@ -236,12 +236,12 @@ namespace WidgetCanvas.Windows
         public void HideWidget() => RequestHide();
 
         /// <summary>
-        /// 关闭独立窗口并返回创建它的浮岛或组件库入口。
+        /// 关闭独立窗口，并静默恢复到创建它的浮岛或组件库归属。
         /// </summary>
         public void ReturnToOrigin() => RequestClose(GetOriginCloseAction());
 
         /// <summary>
-        /// 关闭独立窗口，将组件放回主浮岛画布并显示主浮岛。
+        /// 关闭独立窗口并将组件放回主浮岛画布，不主动显示主浮岛。
         /// </summary>
         public void ReturnToCanvas() => RequestClose(DetachedCloseAction.Canvas);
 
@@ -385,7 +385,7 @@ namespace WidgetCanvas.Windows
                 {
                     stage = "注入宿主脚本";
                     await core.AddScriptToExecuteOnDocumentCreatedAsync(
-                        HtmlWidgetCanvasWindow.WidgetHostBridgeScript);
+                        HtmlWidgetHostBridge.Script);
                     _bridgeInstalled = true;
                 }
                 stage = "加载组件 HTML";

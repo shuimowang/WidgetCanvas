@@ -71,6 +71,7 @@ namespace WidgetCanvas.HtmlWidgets
             text.AppendLine();
             text.AppendLine("状态（每个组件实例隔离，值是原生 JSON，不要 stringify/parse）：");
             text.AppendLine("- host.state.read(key, defaultValue)；host.state.write(key, value)；host.state.remove(key)；host.state.clear()；host.state.flush() 仅在必须立即落盘时调用。");
+            text.AppendLine("- 状态键最多 256 个字符，每个组件最多 2048 项、合计 4 MiB；状态只保存必要数据，不保存图片、文件或大段接口响应。");
             text.AppendLine("- 输入、待办、开关和设置每次变化后立即 write；不要在 JS 中延迟或防抖保存，宿主已负责合并磁盘写入。持久化只用 state，不用 localStorage、sessionStorage、IndexedDB 或 Cookie。");
             text.AppendLine();
             text.AppendLine("常用能力（按需使用）：");
