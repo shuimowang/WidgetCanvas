@@ -8,18 +8,24 @@ namespace WidgetCanvas
     internal static class AppPaths
     {
         private const string ProductFolderName = "浮岛";
+        private static readonly string? ProfileRoot = ResolveProfileRoot(
+            Environment.GetEnvironmentVariable("WIDGETCANVAS_PROFILE_ROOT"));
 
-        public static string UserDataFolder { get; } = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            ProductFolderName);
+        public static string UserDataFolder { get; } = ProfileRoot != null
+            ? Path.Combine(ProfileRoot, "Documents")
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                ProductFolderName);
 
         public static string ComponentsFolder { get; } = Path.Combine(UserDataFolder, "组件");
 
         public static string WidgetCatalogFilePath { get; } = Path.Combine(ComponentsFolder, "widgets.json");
 
-        public static string LocalDataFolder { get; } = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            ProductFolderName);
+        public static string LocalDataFolder { get; } = ProfileRoot != null
+            ? Path.Combine(ProfileRoot, "Local")
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                ProductFolderName);
 
         public static string WebView2DataFolder { get; } = Path.Combine(LocalDataFolder, "WebView2");
 
@@ -44,6 +50,15 @@ namespace WidgetCanvas
         public static string WebDavSyncBaseFilePath { get; } = Path.Combine(SyncFolder, "webdav-base.json");
 
         public static string LogsFolder { get; } = Path.Combine(LocalDataFolder, "Logs");
+
+        internal static string? ResolveProfileRoot(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return null;
+            if (!Path.IsPathFullyQualified(path))
+                throw new ArgumentException("WIDGETCANVAS_PROFILE_ROOT 必须是绝对路径。");
+            return Path.GetFullPath(path);
+        }
 
         public static void EnsureCreated()
         {

@@ -56,8 +56,8 @@ namespace WidgetCanvas
             _instanceMutex = new Mutex(initiallyOwned: true, InstanceMutexName, out bool isFirstInstance);
             if (!isFirstInstance)
             {
-                SendArgumentsToRunningInstance(NormalizeFileArgument(e.Args));
-                Shutdown();
+                bool forwarded = SendArgumentsToRunningInstance(NormalizeFileArgument(e.Args), _instanceMutex);
+                Shutdown(forwarded ? 0 : 1);
                 return;
             }
 
@@ -359,7 +359,14 @@ namespace WidgetCanvas
                     Settings.WebDavDeviceId,
                     AppPaths.WidgetCatalogFilePath,
                     AppPaths.CanvasStateFilePath,
-                    AppPaths.WebDavSyncBaseFilePath);
+                    AppPaths.WebDavSyncBaseFilePath,
+                    verifyLocalState: () =>
+                    {
+                        string? currentBlockReason = HtmlWidgetCanvasWindow.GetSynchronizationBlockReason(
+                            includePendingChanges: true);
+                        if (!string.IsNullOrWhiteSpace(currentBlockReason))
+                            throw new InvalidOperationException(currentBlockReason);
+                    });
                 if (result.LocalDataChanged)
                     HtmlWidgetCanvasWindow.ReloadDataAfterSync();
                 Settings.LastWebDavSyncUtc = DateTimeOffset.UtcNow;
@@ -375,6 +382,9 @@ namespace WidgetCanvas
 
         internal async Task<string> CheckForUpdatesAsync(Window? owner)
         {
+            if (UpdateService.ManagedByQuicker)
+                return UpdateService.QuickerUpdateMessage;
+
             UpdateService updater = _updateService
                 ?? throw new InvalidOperationException("更新服务尚未初始化。");
             UpdateCheckResult update = await updater.CheckAsync(Settings.UpdateChannel);
@@ -402,7 +412,7 @@ namespace WidgetCanvas
 
         private async Task CheckForUpdatesOnStartupAsync()
         {
-            if (!Settings.AutoUpdateEnabled)
+            if (UpdateService.ManagedByQuicker || !Settings.AutoUpdateEnabled)
                 return;
             if (Settings.LastUpdateCheckUtc is DateTimeOffset lastCheck &&
                 DateTimeOffset.UtcNow - lastCheck < TimeSpan.FromHours(12))
@@ -559,7 +569,7 @@ namespace WidgetCanvas
             }
         }
 
-        private static void SendArgumentsToRunningInstance(string[] args)
+        private static bool SendArgumentsToRunningInstance(string[] args, Mutex instanceMutex)
         {
             try
             {
@@ -569,12 +579,39 @@ namespace WidgetCanvas
                     PipeDirection.Out,
                     PipeOptions.Asynchronous);
                 client.Connect(timeout: 3000);
-                using var writer = new StreamWriter(client) { AutoFlush = true };
-                writer.WriteLine(JsonSerializer.Serialize(args));
+                using (var writer = new StreamWriter(client) { AutoFlush = true })
+                    writer.WriteLine(JsonSerializer.Serialize(args));
+                if (IsExitRequest(args))
+                    WaitForInstanceExit(instanceMutex, TimeSpan.FromSeconds(15));
+                return true;
             }
             catch (Exception ex)
             {
                 WriteDiagnosticLog("ipc-client", ex);
+                return false;
+            }
+        }
+
+        internal static void WaitForInstanceExit(Mutex instanceMutex, TimeSpan timeout)
+        {
+            bool acquired = false;
+            try
+            {
+                try
+                {
+                    acquired = instanceMutex.WaitOne(timeout);
+                }
+                catch (AbandonedMutexException)
+                {
+                    acquired = true;
+                }
+                if (!acquired)
+                    throw new TimeoutException("等待 WidgetCanvas 退出超时，未完成退出。");
+            }
+            finally
+            {
+                if (acquired)
+                    instanceMutex.ReleaseMutex();
             }
         }
 

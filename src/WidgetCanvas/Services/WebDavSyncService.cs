@@ -148,17 +148,32 @@ namespace WidgetCanvas.Services
             string contentFilePath,
             string runtimeFilePath,
             string baseFilePath,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            Action? verifyLocalState = null)
         {
             ArgumentNullException.ThrowIfNull(options);
             ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
             await _syncGate.WaitAsync(cancellationToken);
             try
             {
+                verifyLocalState?.Invoke();
+                HtmlWidgetCanvasLoadResult localLoad;
+                string localRevision;
+                lock (HtmlWidgetCanvasStore.SyncRoot)
+                {
+                    localLoad = HtmlWidgetCanvasStore.Load(contentFilePath, runtimeFilePath);
+                    if (!string.IsNullOrWhiteSpace(localLoad.Notice) ||
+                        (File.Exists(baseFilePath) &&
+                         (!File.Exists(contentFilePath) || !File.Exists(runtimeFilePath))))
+                    {
+                        throw new InvalidDataException(
+                            "本机组件数据或运行状态无法完整读取，已停止同步以保留远端数据。请先在本机确认并保存组件数据。" +
+                            localLoad.Notice);
+                    }
+                    localRevision = CaptureLocalRevision(contentFilePath, runtimeFilePath);
+                }
+
                 await EnsureSyncDirectoryAsync(options, cancellationToken);
-                HtmlWidgetCanvasLoadResult localLoad = HtmlWidgetCanvasStore.Load(
-                    contentFilePath,
-                    runtimeFilePath);
                 List<HtmlWidgetDefinition> localWidgets = localLoad.Widgets;
                 WebDavSyncDocument baseDocument = LoadDocument(baseFilePath) ?? CreateEmptyDocument(deviceId);
                 RemoteDocument? remote = await DownloadAsync(options, cancellationToken);
@@ -176,6 +191,9 @@ namespace WidgetCanvas.Services
 
                     if (remoteChanged)
                     {
+                        verifyLocalState?.Invoke();
+                        lock (HtmlWidgetCanvasStore.SyncRoot)
+                            RequireLocalRevision(contentFilePath, runtimeFilePath, localRevision);
                         try
                         {
                             await UploadAsync(
@@ -192,16 +210,21 @@ namespace WidgetCanvas.Services
                         }
                     }
 
-                    if (merge.LocalDataChanged)
+                    verifyLocalState?.Invoke();
+                    lock (HtmlWidgetCanvasStore.SyncRoot)
                     {
-                        HtmlWidgetCanvasStore.Save(
-                            contentFilePath,
-                            runtimeFilePath,
-                            merge.Widgets,
-                            localLoad.Canvases,
-                            localLoad.ActiveCanvasId);
+                        RequireLocalRevision(contentFilePath, runtimeFilePath, localRevision);
+                        if (merge.LocalDataChanged)
+                        {
+                            HtmlWidgetCanvasStore.Save(
+                                contentFilePath,
+                                runtimeFilePath,
+                                merge.Widgets,
+                                localLoad.Canvases,
+                                localLoad.ActiveCanvasId);
+                        }
+                        SaveDocument(baseFilePath, mergedDocument);
                     }
-                    SaveDocument(baseFilePath, mergedDocument);
 
                     string message = merge.ConflictCount > 0
                         ? $"同步完成 · 保留了 {merge.ConflictCount} 个来自其他设备的冲突副本"
@@ -239,6 +262,35 @@ namespace WidgetCanvas.Services
                 .OrderBy(widget => widget.Id, StringComparer.Ordinal)
                 .ToList()
         };
+
+        private static string CaptureLocalRevision(string contentFilePath, string runtimeFilePath)
+        {
+            return FileFingerprint(contentFilePath) + ":" + FileFingerprint(runtimeFilePath);
+
+            static string FileFingerprint(string path)
+            {
+                if (!File.Exists(path))
+                    return "missing";
+                using var stream = new FileStream(
+                    path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                return Convert.ToHexString(SHA256.HashData(stream));
+            }
+        }
+
+        private static void RequireLocalRevision(
+            string contentFilePath,
+            string runtimeFilePath,
+            string expectedRevision)
+        {
+            if (!string.Equals(
+                    CaptureLocalRevision(contentFilePath, runtimeFilePath),
+                    expectedRevision,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "同步期间本机组件数据已更改，已保留本机更改并停止应用同步结果，请重新同步。若上传已完成，远端可能已更新。");
+            }
+        }
 
         private async Task<RemoteDocument?> DownloadAsync(
             WebDavConnectionOptions options,

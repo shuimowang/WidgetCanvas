@@ -498,7 +498,7 @@ namespace WidgetCanvas.Windows
             return InvokeOnUiThread(window.SaveNow);
         }
 
-        internal static string? GetSynchronizationBlockReason()
+        internal static string? GetSynchronizationBlockReason(bool includePendingChanges = false)
         {
             HtmlWidgetCanvasWindow? window = _instance;
             if (window == null)
@@ -509,6 +509,8 @@ namespace WidgetCanvas.Windows
                     return "请先保存或取消当前组件编辑，再进行 WebDAV 同步。";
                 if (window._isAdjustingWidget || window._visibilityChangePending)
                     return "组件窗口正在调整，请稍后再同步。";
+                if (includePendingChanges && window._saveDirty)
+                    return "同步期间组件发生了尚未保存的更改，请保存后重新同步。";
                 return null;
             });
         }
@@ -4051,7 +4053,7 @@ namespace WidgetCanvas.Windows
             return new { started = true, processId };
         }
 
-        private static async Task<object> RunWidgetProcessAsync(JsonElement args)
+        internal static async Task<object> RunWidgetProcessAsync(JsonElement args)
         {
             ProcessStartInfo startInfo = CreateWidgetProcessStartInfo(args, "process.run");
             startInfo.CreateNoWindow = true;
@@ -4074,28 +4076,34 @@ namespace WidgetCanvas.Windows
                 10 * 1024 * 1024);
 
             using Process process = StartWidgetProcessCore(startInfo);
+            using var cancellation = new CancellationTokenSource(timeoutMs);
             var budget = new ProcessOutputBudget(maxOutputBytes);
             Task<byte[]> stdoutTask = ReadProcessOutputAsync(
                 process.StandardOutput.BaseStream,
-                budget);
+                budget,
+                cancellation.Token);
             Task<byte[]> stderrTask = ReadProcessOutputAsync(
                 process.StandardError.BaseStream,
-                budget);
-            Task inputTask = WriteProcessInputAsync(process, input);
+                budget,
+                cancellation.Token);
+            Task inputTask = WriteProcessInputAsync(process, input, cancellation.Token);
             Task exitTask = process.WaitForExitAsync();
             bool timedOut = false;
             try
             {
-                await exitTask
-                    .WaitAsync(TimeSpan.FromMilliseconds(timeoutMs))
+                // 子进程可能在主进程退出后继续持有标准流。超时必须覆盖全部
+                // I/O，不能只等待主进程，否则 process.run 会无限挂起。
+                await Task.WhenAll(exitTask, inputTask, stdoutTask, stderrTask)
+                    .WaitAsync(cancellation.Token)
                     .ConfigureAwait(false);
             }
-            catch (TimeoutException)
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
                 timedOut = true;
                 try
                 {
-                    process.Kill(entireProcessTree: true);
+                    if (!process.HasExited)
+                        process.Kill(entireProcessTree: true);
                 }
                 catch (InvalidOperationException) when (process.HasExited)
                 {
@@ -4106,7 +4114,14 @@ namespace WidgetCanvas.Windows
                 }
                 await exitTask.ConfigureAwait(false);
             }
+            finally
+            {
+                // 即使终止进程失败，也收回已取消的管道任务，避免后台读写悬挂。
+                if (cancellation.IsCancellationRequested)
+                    await Task.WhenAll(inputTask, stdoutTask, stderrTask).ConfigureAwait(false);
+            }
 
+            timedOut |= cancellation.IsCancellationRequested;
             await inputTask.ConfigureAwait(false);
             byte[][] output = await Task
                 .WhenAll(stdoutTask, stderrTask)
@@ -4177,26 +4192,37 @@ namespace WidgetCanvas.Windows
             }
         }
 
-        private static async Task WriteProcessInputAsync(Process process, string input)
+        private static async Task WriteProcessInputAsync(
+            Process process,
+            string input,
+            CancellationToken cancellationToken)
         {
             try
             {
                 if (input.Length > 0)
                 {
-                    await process.StandardInput.WriteAsync(input).ConfigureAwait(false);
-                    await process.StandardInput.FlushAsync().ConfigureAwait(false);
+                    await process.StandardInput.WriteAsync(input.AsMemory(), cancellationToken)
+                        .ConfigureAwait(false);
+                    await process.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException)
+            {
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
             }
             finally
             {
                 try
                 {
+                    // StreamWriter.Close 会同步刷新缓冲区；超时时先关闭底层管道，
+                    // 避免不读取 stdin 的子进程让关闭操作再次阻塞。
+                    if (cancellationToken.IsCancellationRequested)
+                        process.StandardInput.BaseStream.Dispose();
                     process.StandardInput.Close();
                 }
-                catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException)
                 {
                 }
             }
@@ -4204,7 +4230,8 @@ namespace WidgetCanvas.Windows
 
         private static async Task<byte[]> ReadProcessOutputAsync(
             Stream stream,
-            ProcessOutputBudget budget)
+            ProcessOutputBudget budget,
+            CancellationToken cancellationToken)
         {
             using var memory = new MemoryStream(64 * 1024);
             byte[] buffer = new byte[16 * 1024];
@@ -4212,7 +4239,7 @@ namespace WidgetCanvas.Windows
             {
                 while (true)
                 {
-                    int read = await stream.ReadAsync(buffer).ConfigureAwait(false);
+                    int read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
                     if (read == 0)
                         break;
                     int keep = budget.Reserve(read);
@@ -4221,6 +4248,9 @@ namespace WidgetCanvas.Windows
                 }
             }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            {
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
             }
             return memory.ToArray();

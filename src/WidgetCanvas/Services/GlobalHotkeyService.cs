@@ -120,6 +120,7 @@ namespace WidgetCanvas.Services
             if (modifiers == ModifierKeys.None)
                 throw new FormatException("全局快捷键至少需要一个修饰键。");
             if (!Enum.TryParse(parts[^1], ignoreCase: true, out Key key) ||
+                !Enum.IsDefined(key) ||
                 IsModifierKey(key) || IsUnsupportedKey(key))
                 throw new FormatException("无法识别快捷键按键：" + parts[^1]);
             return new HotkeyGesture(modifiers, key);
@@ -127,7 +128,8 @@ namespace WidgetCanvas.Services
 
         public static string FromInput(Key key, ModifierKeys modifiers)
         {
-            if (IsUnsupportedKey(key) || IsModifierKey(key) || modifiers == ModifierKeys.None)
+            if (!Enum.IsDefined(key) || IsUnsupportedKey(key) ||
+                IsModifierKey(key) || modifiers == ModifierKeys.None)
                 throw new FormatException("请按下至少包含 Ctrl、Alt、Shift 或 Win 的组合键。");
 
             string[] names =

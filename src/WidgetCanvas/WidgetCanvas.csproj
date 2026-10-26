@@ -14,7 +14,7 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <PublishReadyToRun>true</PublishReadyToRun>
-    <Version>0.5.2</Version>
+    <Version>0.5.4</Version>
     <Authors>shuimowang</Authors>
     <Product>WidgetCanvas</Product>
     <Description>Turn AI-generated HTML into live Windows desktop widgets.</Description>
@@ -27,6 +27,10 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\WidgetCanvas.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(QuickerDistribution)' == 'true'">
+    <DefineConstants>$(DefineConstants);QUICKER_DISTRIBUTION</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
