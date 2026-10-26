@@ -124,6 +124,8 @@ dotnet publish src\WidgetCanvas\WidgetCanvas.csproj -c Release -r win-x64 --self
 
 发布结果位于 `src\WidgetCanvas\bin\Release\net10.0-windows\win-x64\publish`。
 
+通过 Quicker 动作分发时，使用[动作版发布配置](docs/quicker.zh-CN.md)，复用 .NET 10 共享运行时并由动作管理更新。
+
 ## 当前阶段
 
 WidgetCanvas 目前处于早期预览阶段。`v1.0` 前数据格式仍可能调整，但提供给组件使用的宿主接口会保持克制、准确并持续记录。

@@ -31,6 +31,8 @@ namespace WidgetCanvas.HtmlWidgets
 
         public const string DefaultCanvasName = "默认画布";
 
+        internal static object SyncRoot { get; } = new();
+
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             WriteIndented = true,
@@ -42,6 +44,12 @@ namespace WidgetCanvas.HtmlWidgets
         public static string DefaultRuntimeFilePath => AppPaths.CanvasStateFilePath;
 
         public static HtmlWidgetCanvasLoadResult Load(string contentFilePath, string runtimeFilePath)
+        {
+            lock (SyncRoot)
+                return LoadCore(contentFilePath, runtimeFilePath);
+        }
+
+        private static HtmlWidgetCanvasLoadResult LoadCore(string contentFilePath, string runtimeFilePath)
         {
             var notices = new List<string>();
             bool recoveredFromBackup = false;
@@ -120,6 +128,17 @@ namespace WidgetCanvas.HtmlWidgets
             IReadOnlyList<HtmlWidgetDefinition> widgets,
             IReadOnlyList<HtmlWidgetCanvasDefinition>? canvases = null,
             string? activeCanvasId = null)
+        {
+            lock (SyncRoot)
+                SaveCore(contentFilePath, runtimeFilePath, widgets, canvases, activeCanvasId);
+        }
+
+        private static void SaveCore(
+            string contentFilePath,
+            string runtimeFilePath,
+            IReadOnlyList<HtmlWidgetDefinition> widgets,
+            IReadOnlyList<HtmlWidgetCanvasDefinition>? canvases,
+            string? activeCanvasId)
         {
             List<HtmlWidgetCanvasDefinition> normalizedCanvases = NormalizeCanvases(canvases);
             string normalizedActiveCanvasId = activeCanvasId?.Trim() ?? string.Empty;

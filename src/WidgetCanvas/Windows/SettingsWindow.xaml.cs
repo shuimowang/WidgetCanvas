@@ -65,6 +65,15 @@ namespace WidgetCanvas.Windows
             UpdateStatusText.Text = _app.Settings.LastUpdateCheckUtc is DateTimeOffset checkedAt
                 ? "上次检查：" + checkedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                 : "尚未检查更新";
+            if (UpdateService.ManagedByQuicker)
+            {
+                VersionText.Text += " · Quicker 动作版";
+                AutoUpdateToggle.IsEnabled = false;
+                GiteeUpdateRadio.IsEnabled = false;
+                GitHubUpdateRadio.IsEnabled = false;
+                UpdateStatusText.Text = UpdateService.QuickerUpdateMessage;
+                CheckUpdateButton.Content = "更新方式";
+            }
             _initializing = false;
         }
 

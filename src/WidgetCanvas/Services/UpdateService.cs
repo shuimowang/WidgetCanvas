@@ -32,6 +32,15 @@ namespace WidgetCanvas.Services
 
     internal sealed class UpdateService
     {
+        public const string QuickerUpdateMessage = "请更新 Quicker 中的“浮岛”动作以获取新版。";
+
+        public static bool ManagedByQuicker =>
+#if QUICKER_DISTRIBUTION
+            true;
+#else
+            false;
+#endif
+
         public const string ProjectUrl = "https://github.com/shuimowang/WidgetCanvas";
         public const string ReleasesUrl = ProjectUrl + "/releases";
         public const string FeedbackUrl = ProjectUrl + "/issues/new";

@@ -123,6 +123,51 @@ public sealed class AppServicesTests : IDisposable
     }
 
     [Fact]
+    public void ExitWaitFailsWhileTheRunningInstanceStillOwnsTheMutex()
+    {
+        using var instanceMutex = new Mutex();
+        using var owned = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var owner = new Thread(() =>
+        {
+            instanceMutex.WaitOne();
+            owned.Set();
+            release.Wait();
+            instanceMutex.ReleaseMutex();
+        });
+        owner.Start();
+        try
+        {
+            Assert.True(owned.Wait(TimeSpan.FromSeconds(5)));
+            Assert.Throws<TimeoutException>(() =>
+                App.WaitForInstanceExit(instanceMutex, TimeSpan.FromMilliseconds(50)));
+        }
+        finally
+        {
+            release.Set();
+            Assert.True(owner.Join(TimeSpan.FromSeconds(5)));
+        }
+
+        App.WaitForInstanceExit(instanceMutex, TimeSpan.FromSeconds(1));
+        Assert.True(instanceMutex.WaitOne(0));
+        instanceMutex.ReleaseMutex();
+    }
+
+    [Fact]
+    public void ExitWaitTreatsAnAbandonedInstanceAsExited()
+    {
+        using var instanceMutex = new Mutex();
+        var owner = new Thread(() => instanceMutex.WaitOne());
+        owner.Start();
+        Assert.True(owner.Join(TimeSpan.FromSeconds(5)));
+
+        App.WaitForInstanceExit(instanceMutex, TimeSpan.FromSeconds(1));
+
+        Assert.True(instanceMutex.WaitOne(0));
+        instanceMutex.ReleaseMutex();
+    }
+
+    [Fact]
     public void FileWidgetArgumentIsNormalizedBeforeForwarding()
     {
         string relativePath = Path.Combine("widgets", "clock.html");

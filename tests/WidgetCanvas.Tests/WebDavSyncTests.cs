@@ -177,6 +177,210 @@ public sealed class WebDavSyncTests : IDisposable
         Assert.Equal("Basic", handler.LastAuthorizationScheme);
     }
 
+    [Theory]
+    [InlineData(false, "corrupt")]
+    [InlineData(true, "corrupt")]
+    [InlineData(false, "missing")]
+    [InlineData(true, "missing")]
+    [InlineData(false, "locked")]
+    [InlineData(true, "locked")]
+    public async Task DamagedLocalDataDoesNotReachOrOverwriteRemote(bool damageRuntime, string damage)
+    {
+        string contentPath = Path.Combine(_directory, "components", "widgets.json");
+        string runtimePath = Path.Combine(_directory, "state", "canvas.json");
+        string basePath = Path.Combine(_directory, "sync", "base.json");
+        HtmlWidgetCanvasStore.Save(
+            contentPath,
+            runtimePath,
+            [CreateWidget("a", "便签", "保留的数据", x: 10, y: 20)]);
+        var handler = new MemoryWebDavHandler();
+        using var service = new WebDavSyncService(handler);
+        WebDavConnectionOptions options = WebDavSyncService.CreateOptions(
+            "https://dav.example.test/widgets/", "user", "password");
+        await service.SynchronizeAsync(options, "device-a", contentPath, runtimePath, basePath);
+        byte[] remoteBefore = handler.RemoteJson!.ToArray();
+        byte[] baselineBefore = File.ReadAllBytes(basePath);
+        int requestsBefore = handler.RequestCount;
+        string damagedPath = damageRuntime ? runtimePath : contentPath;
+        if (damage == "missing")
+            File.Delete(damagedPath);
+        else if (damage == "corrupt")
+            File.WriteAllText(damagedPath, "not json");
+        using FileStream? fileLock = damage == "locked"
+            ? new FileStream(damagedPath, FileMode.Open, FileAccess.Read, FileShare.None)
+            : null;
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => service.SynchronizeAsync(
+            options, "device-a", contentPath, runtimePath, basePath));
+
+        Assert.Equal(requestsBefore, handler.RequestCount);
+        Assert.Equal(remoteBefore, handler.RemoteJson);
+        Assert.Equal(baselineBefore, File.ReadAllBytes(basePath));
+        if (damage == "corrupt")
+            Assert.Equal("not json", File.ReadAllText(damagedPath));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BackupRecoveryDoesNotUploadAnOlderSnapshot(bool damageRuntime)
+    {
+        string contentPath = Path.Combine(_directory, "components", "widgets.json");
+        string runtimePath = Path.Combine(_directory, "state", "canvas.json");
+        string basePath = Path.Combine(_directory, "sync", "base.json");
+        HtmlWidgetCanvasStore.Save(
+            contentPath, runtimePath, [CreateWidget("a", "便签", "older", x: 10, y: 20)]);
+        HtmlWidgetCanvasStore.Save(
+            contentPath, runtimePath, [CreateWidget("a", "最新便签", "latest", x: 10, y: 20)]);
+        var handler = new MemoryWebDavHandler();
+        using var service = new WebDavSyncService(handler);
+        WebDavConnectionOptions options = WebDavSyncService.CreateOptions(
+            "https://dav.example.test/widgets/", "user", "password");
+        await service.SynchronizeAsync(options, "device-a", contentPath, runtimePath, basePath);
+        byte[] remoteBefore = handler.RemoteJson!.ToArray();
+        byte[] baselineBefore = File.ReadAllBytes(basePath);
+        int requestsBefore = handler.RequestCount;
+        File.WriteAllText(damageRuntime ? runtimePath : contentPath, "not json");
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => service.SynchronizeAsync(
+            options, "device-a", contentPath, runtimePath, basePath));
+
+        Assert.Equal(requestsBefore, handler.RequestCount);
+        Assert.Equal(remoteBefore, handler.RemoteJson);
+        Assert.Equal(baselineBefore, File.ReadAllBytes(basePath));
+    }
+
+    [Fact]
+    public async Task ValidEmptyLibraryStillUploadsIntentionalDeletions()
+    {
+        string contentPath = Path.Combine(_directory, "components", "widgets.json");
+        string runtimePath = Path.Combine(_directory, "state", "canvas.json");
+        string basePath = Path.Combine(_directory, "sync", "base.json");
+        HtmlWidgetCanvasStore.Save(
+            contentPath,
+            runtimePath,
+            [CreateWidget("a", "便签", "hello", x: 10, y: 20)]);
+        var handler = new MemoryWebDavHandler();
+        using var service = new WebDavSyncService(handler);
+        WebDavConnectionOptions options = WebDavSyncService.CreateOptions(
+            "https://dav.example.test/widgets/", "user", "password");
+        await service.SynchronizeAsync(options, "device-a", contentPath, runtimePath, basePath);
+        HtmlWidgetCanvasStore.Save(contentPath, runtimePath, []);
+
+        WebDavSyncResult result = await service.SynchronizeAsync(
+            options, "device-a", contentPath, runtimePath, basePath);
+
+        Assert.True(result.RemoteDataChanged);
+        Assert.Equal(0, result.WidgetCount);
+        using JsonDocument remote = JsonDocument.Parse(handler.RemoteJson!);
+        Assert.Empty(remote.RootElement.GetProperty("widgets").EnumerateArray());
+    }
+
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("PUT")]
+    public async Task LocalEditsDuringNetworkRequestsAreNotOverwrittenOrMarkedSynchronized(string method)
+    {
+        string contentPath = Path.Combine(_directory, "components", "widgets.json");
+        string runtimePath = Path.Combine(_directory, "state", "canvas.json");
+        string basePath = Path.Combine(_directory, "sync", "base.json");
+        HtmlWidgetCanvasStore.Save(
+            contentPath, runtimePath, [CreateWidget("a", "便签", "baseline", x: 10, y: 20)]);
+        var handler = new MemoryWebDavHandler();
+        using var service = new WebDavSyncService(handler);
+        WebDavConnectionOptions options = WebDavSyncService.CreateOptions(
+            "https://dav.example.test/widgets/", "user", "password");
+        await service.SynchronizeAsync(options, "device-a", contentPath, runtimePath, basePath);
+        byte[] baselineBefore = File.ReadAllBytes(basePath);
+        handler.RemoteJson = JsonSerializer.SerializeToUtf8Bytes(WebDavSyncService.CreateDocument(
+            [CreateWidget("a", "远端便签", "remote edit", x: 10, y: 20)], "device-b"));
+        byte[] remoteBefore = handler.RemoteJson.ToArray();
+        HtmlWidgetCanvasStore.Save(
+            contentPath, runtimePath, [CreateWidget("a", "本机便签", "before sync", x: 10, y: 20)]);
+        handler.PauseOnMethod = new HttpMethod(method);
+        Task<WebDavSyncResult> pending = service.SynchronizeAsync(
+            options, "device-a", contentPath, runtimePath, basePath);
+
+        await handler.RequestPaused.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        try
+        {
+            HtmlWidgetCanvasStore.Save(
+                contentPath, runtimePath, [CreateWidget("a", "最新本机便签", "edited during sync", x: 70, y: 80)]);
+        }
+        finally
+        {
+            handler.ContinueRequest.TrySetResult();
+        }
+        await Assert.ThrowsAsync<InvalidOperationException>(() => pending);
+
+        HtmlWidgetDefinition local = Assert.Single(HtmlWidgetCanvasStore.Load(contentPath, runtimePath).Widgets);
+        Assert.Equal("最新本机便签", HtmlWidgetTitle.GetDisplayName(local));
+        Assert.Equal("edited during sync", local.State["text"].GetString());
+        Assert.Equal(70, local.X);
+        Assert.Equal(baselineBefore, File.ReadAllBytes(basePath));
+        if (method == "GET")
+            Assert.Equal(remoteBefore, handler.RemoteJson);
+        else
+            Assert.NotEqual(remoteBefore, handler.RemoteJson);
+    }
+
+    [Theory]
+    [InlineData("start")]
+    [InlineData("GET")]
+    [InlineData("PUT")]
+    public async Task PendingMemoryEditsStopSynchronizationBeforeApplyingAStaleSnapshot(string phase)
+    {
+        string contentPath = Path.Combine(_directory, "components", "widgets.json");
+        string runtimePath = Path.Combine(_directory, "state", "canvas.json");
+        string basePath = Path.Combine(_directory, "sync", "base.json");
+        HtmlWidgetCanvasStore.Save(
+            contentPath, runtimePath, [CreateWidget("a", "便签", "baseline", x: 10, y: 20)]);
+        var handler = new MemoryWebDavHandler();
+        using var service = new WebDavSyncService(handler);
+        WebDavConnectionOptions options = WebDavSyncService.CreateOptions(
+            "https://dav.example.test/widgets/", "user", "password");
+        await service.SynchronizeAsync(options, "device-a", contentPath, runtimePath, basePath);
+        handler.RemoteJson = JsonSerializer.SerializeToUtf8Bytes(WebDavSyncService.CreateDocument(
+            [CreateWidget("a", "远端便签", "remote edit", x: 10, y: 20)], "device-b"));
+        HtmlWidgetCanvasStore.Save(
+            contentPath, runtimePath, [CreateWidget("a", "本机便签", "before sync", x: 10, y: 20)]);
+        byte[] contentBefore = File.ReadAllBytes(contentPath);
+        byte[] runtimeBefore = File.ReadAllBytes(runtimePath);
+        byte[] baselineBefore = File.ReadAllBytes(basePath);
+        byte[] remoteBefore = handler.RemoteJson.ToArray();
+        int requestsBefore = handler.RequestCount;
+        int putsBefore = handler.PutCount;
+        bool pendingMemoryEdits = phase == "start";
+        if (phase != "start")
+            handler.PauseOnMethod = new HttpMethod(phase);
+
+        Task<WebDavSyncResult> pending = service.SynchronizeAsync(
+            options, "device-a", contentPath, runtimePath, basePath,
+            verifyLocalState: () =>
+            {
+                Assert.False(Monitor.IsEntered(HtmlWidgetCanvasStore.SyncRoot));
+                if (pendingMemoryEdits)
+                    throw new InvalidOperationException("unsaved local edits");
+            });
+        if (phase != "start")
+        {
+            await handler.RequestPaused.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            pendingMemoryEdits = true;
+            handler.ContinueRequest.TrySetResult();
+        }
+        InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(() => pending);
+
+        Assert.Equal("unsaved local edits", error.Message);
+        Assert.Equal(contentBefore, File.ReadAllBytes(contentPath));
+        Assert.Equal(runtimeBefore, File.ReadAllBytes(runtimePath));
+        Assert.Equal(baselineBefore, File.ReadAllBytes(basePath));
+        Assert.Equal(putsBefore + (phase == "PUT" ? 1 : 0), handler.PutCount);
+        if (phase == "start")
+            Assert.Equal(requestsBefore, handler.RequestCount);
+        if (phase != "PUT")
+            Assert.Equal(remoteBefore, handler.RemoteJson);
+    }
+
     private static HtmlWidgetDefinition CreateWidget(
         string id,
         string title,
@@ -204,7 +408,17 @@ public sealed class WebDavSyncTests : IDisposable
 
     private sealed class MemoryWebDavHandler : HttpMessageHandler
     {
-        public byte[]? RemoteJson { get; private set; }
+        public byte[]? RemoteJson { get; set; }
+
+        public int RequestCount { get; private set; }
+
+        public int PutCount { get; private set; }
+
+        public HttpMethod? PauseOnMethod { get; set; }
+
+        public TaskCompletionSource RequestPaused { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ContinueRequest { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public string? LastAuthorizationScheme { get; private set; }
 
@@ -212,7 +426,14 @@ public sealed class WebDavSyncTests : IDisposable
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            RequestCount++;
             LastAuthorizationScheme = request.Headers.Authorization?.Scheme;
+            if (request.Method == PauseOnMethod)
+            {
+                PauseOnMethod = null;
+                RequestPaused.TrySetResult();
+                await ContinueRequest.Task.WaitAsync(cancellationToken);
+            }
             if (request.Method.Method == "PROPFIND")
                 return new HttpResponseMessage((HttpStatusCode)207);
             if (request.Method == HttpMethod.Get)
@@ -227,6 +448,7 @@ public sealed class WebDavSyncTests : IDisposable
             }
             if (request.Method == HttpMethod.Put)
             {
+                PutCount++;
                 RemoteJson = await request.Content!.ReadAsByteArrayAsync(cancellationToken);
                 return new HttpResponseMessage(HttpStatusCode.Created)
                 {
